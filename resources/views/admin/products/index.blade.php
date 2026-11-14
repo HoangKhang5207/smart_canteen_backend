@@ -3,12 +3,20 @@
 @section('title', 'Quản lý món ăn — Smart Canteen Admin')
 
 @section('content')
+@php
+    $isAdmin = (auth()->user()?->role?->value ?? auth()->user()?->role) === 'admin';
+@endphp
+
 <div class="flex-between" style="margin-bottom: 1.25rem;">
     <div>
         <h1 style="font-size: 1.35rem; margin: 0;">Quản lý món ăn</h1>
-        <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0.2rem 0 0;">Cập nhật giá bán (VND) và trạng thái phục vụ mà không làm thay đổi các đơn hàng lịch sử</p>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0.2rem 0 0;">
+            {{ $isAdmin ? 'Cập nhật giá bán (VND) và trạng thái phục vụ mà không làm thay đổi các đơn hàng lịch sử' : 'Chế độ tra cứu thực đơn dành cho Nhân viên Bếp (Chỉ Admin được chỉnh sửa)' }}
+        </p>
     </div>
-    <a href="{{ route('admin.products.create') }}" class="btn btn-primary">+ Thêm món ăn mới</a>
+    @if ($isAdmin)
+        <a href="{{ route('admin.products.create') }}" class="btn btn-primary">+ Thêm món ăn mới</a>
+    @endif
 </div>
 
 <div class="card">
@@ -20,7 +28,9 @@
                 <th>Danh mục</th>
                 <th>Giá bán (VND)</th>
                 <th>Trạng thái</th>
+                @if ($isAdmin)
                 <th>Thao tác</th>
+                @endif
             </tr>
         </thead>
         <tbody>
@@ -42,6 +52,7 @@
                             <span class="badge badge-CANCELLED">Hết món</span>
                         @endif
                     </td>
+                    @if ($isAdmin)
                     <td>
                         <div class="inline-actions">
                             <a href="{{ route('admin.products.edit', $product) }}" class="btn btn-secondary">Sửa</a>
@@ -52,6 +63,7 @@
                             </form>
                         </div>
                     </td>
+                    @endif
                 </tr>
             @endforeach
         </tbody>

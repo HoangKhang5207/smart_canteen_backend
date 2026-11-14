@@ -229,4 +229,49 @@ class AdminWebPortalTest extends TestCase
 
         $this->assertDatabaseHas('products', ['id' => $product->id]);
     }
+
+    public function test_authenticated_customer_visiting_admin_login_is_logged_out_and_sees_login_form(): void
+    {
+        $customer = User::factory()->create([
+            'role' => UserRole::CUSTOMER,
+        ]);
+
+        $response = $this->actingAs($customer)->get('/admin/login');
+
+        $response->assertOk()->assertSee('Smart Canteen Portal');
+        $this->assertGuest();
+    }
+
+    public function test_staff_can_view_menu_lists_but_only_admin_can_mutate_categories_and_products(): void
+    {
+        $staff = User::factory()->create(['role' => UserRole::STAFF]);
+        $category = Category::factory()->create(['name' => 'Đồ uống', 'is_active' => true]);
+        $product = Product::factory()->for($category)->create([
+            'name' => 'Trà đào cam sả',
+            'price' => 30000,
+        ]);
+
+        // Staff can view categories and products lists
+        $this->actingAs($staff)->get('/admin/categories')->assertOk()->assertSee('Đồ uống');
+        $this->actingAs($staff)->get('/admin/products')->assertOk()->assertSee('Trà đào cam sả');
+
+        // Staff is forbidden from creating/updating/deleting categories or products
+        $this->actingAs($staff)->post('/admin/categories', ['name' => 'Mới'])->assertStatus(403);
+        $this->actingAs($staff)->put("/admin/categories/{$category->id}", ['name' => 'Đổi'])->assertStatus(403);
+        $this->actingAs($staff)->delete("/admin/categories/{$category->id}")->assertStatus(403);
+
+        $this->actingAs($staff)->get('/admin/products/create')->assertStatus(403);
+        $this->actingAs($staff)->post('/admin/products', [
+            'category_id' => $category->id,
+            'name' => 'Món mới',
+            'price' => 25000,
+        ])->assertStatus(403);
+        $this->actingAs($staff)->get("/admin/products/{$product->id}/edit")->assertStatus(403);
+        $this->actingAs($staff)->put("/admin/products/{$product->id}", [
+            'category_id' => $category->id,
+            'name' => 'Trà đào sửa',
+            'price' => 35000,
+        ])->assertStatus(403);
+        $this->actingAs($staff)->delete("/admin/products/{$product->id}")->assertStatus(403);
+    }
 }

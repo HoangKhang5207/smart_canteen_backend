@@ -16,7 +16,16 @@ class AuthController extends Controller
     public function showLogin(Request $request): View|RedirectResponse
     {
         if (Auth::check()) {
-            return redirect('/admin');
+            $user = Auth::user();
+            $roleValue = $user?->role instanceof UserRole ? $user->role->value : (string) $user?->role;
+
+            if (in_array($roleValue, [UserRole::STAFF->value, UserRole::ADMIN->value], true)) {
+                return redirect('/admin');
+            }
+
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
         }
 
         return view('admin.login');

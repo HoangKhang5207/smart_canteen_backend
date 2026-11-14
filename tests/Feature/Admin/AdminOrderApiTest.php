@@ -165,4 +165,36 @@ class AdminOrderApiTest extends TestCase
             'version' => 1,
         ])->assertStatus(403);
     }
+
+    public function test_invalid_status_filter_or_excessive_limit_on_admin_orders_returns_422(): void
+    {
+        $customer = User::factory()->create();
+        $staff = User::factory()->create(['role' => UserRole::STAFF]);
+
+        Order::factory()->count(3)->for($customer)->create([
+            'status' => OrderStatus::PENDING,
+        ]);
+
+        Sanctum::actingAs($staff);
+
+        // Lowercase status filter is normalized to uppercase and accepted
+        $this->getJson('/api/v1/admin/orders?status=pending')
+            ->assertOk()
+            ->assertJsonCount(3, 'data');
+
+        // Explicit limit parameter restricts returned rows
+        $this->getJson('/api/v1/admin/orders?limit=2')
+            ->assertOk()
+            ->assertJsonCount(2, 'data');
+
+        // Invalid status filter returns 422 instead of silently returning unfiltered rows
+        $this->getJson('/api/v1/admin/orders?status=INVALID_STATE')
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['status']);
+
+        // Limit above 100 or below 1 returns 422
+        $this->getJson('/api/v1/admin/orders?limit=101')
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['limit']);
+    }
 }

@@ -3,13 +3,20 @@
 @section('title', 'Quản lý danh mục — Smart Canteen Admin')
 
 @section('content')
+@php
+    $isAdmin = (auth()->user()?->role?->value ?? auth()->user()?->role) === 'admin';
+@endphp
+
 <div class="flex-between" style="margin-bottom: 1.25rem;">
     <div>
         <h1 style="font-size: 1.35rem; margin: 0;">Quản lý danh mục thực đơn</h1>
-        <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0.2rem 0 0;">Thêm, cập nhật hoặc ẩn danh mục món ăn</p>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0.2rem 0 0;">
+            {{ $isAdmin ? 'Thêm, cập nhật hoặc ẩn danh mục món ăn' : 'Chế độ xem danh mục dành cho Nhân viên Bếp (Chỉ Admin được chỉnh sửa)' }}
+        </p>
     </div>
 </div>
 
+@if ($isAdmin)
 <div class="card">
     <h2 style="font-size: 1rem; margin-top: 0;">Thêm danh mục mới</h2>
     <form method="POST" action="{{ route('admin.categories.store') }}" style="display: flex; gap: 0.75rem; align-items: flex-end; flex-wrap: wrap;">
@@ -26,6 +33,7 @@
         <button type="submit" class="btn btn-primary">Thêm danh mục</button>
     </form>
 </div>
+@endif
 
 <div class="card">
     <table>
@@ -34,7 +42,9 @@
                 <th>ID</th>
                 <th>Tên danh mục & Trạng thái</th>
                 <th>Số món ăn</th>
+                @if ($isAdmin)
                 <th>Xóa</th>
+                @endif
             </tr>
         </thead>
         <tbody>
@@ -42,19 +52,27 @@
                 <tr>
                     <td>#{{ $category->id }}</td>
                     <td>
-                        <form method="POST" action="{{ route('admin.categories.update', $category) }}" style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap; margin:0;">
-                            @csrf
-                            @method('PUT')
-                            <input type="text" name="name" value="{{ $category->name }}" required maxlength="100" style="max-width: 260px;">
-                            <input type="hidden" name="is_active" value="0">
-                            <label style="display:flex; align-items:center; gap:0.35rem; font-size:0.82rem;">
-                                <input type="checkbox" name="is_active" value="1" {{ $category->is_active ? 'checked' : '' }}>
-                                Đang hoạt động
-                            </label>
-                            <button type="submit" class="btn btn-secondary">Lưu</button>
-                        </form>
+                        @if ($isAdmin)
+                            <form method="POST" action="{{ route('admin.categories.update', $category) }}" style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap; margin:0;">
+                                @csrf
+                                @method('PUT')
+                                <input type="text" name="name" value="{{ $category->name }}" required maxlength="100" style="max-width: 260px;">
+                                <input type="hidden" name="is_active" value="0">
+                                <label style="display:flex; align-items:center; gap:0.35rem; font-size:0.82rem;">
+                                    <input type="checkbox" name="is_active" value="1" {{ $category->is_active ? 'checked' : '' }}>
+                                    Đang hoạt động
+                                </label>
+                                <button type="submit" class="btn btn-secondary">Lưu</button>
+                            </form>
+                        @else
+                            <strong>{{ $category->name }}</strong>
+                            <span class="badge {{ $category->is_active ? 'badge-READY' : 'badge-CANCELLED' }}" style="margin-left: 0.5rem;">
+                                {{ $category->is_active ? 'Đang hoạt động' : 'Đang ẩn' }}
+                            </span>
+                        @endif
                     </td>
                     <td>{{ $category->products_count }} món</td>
+                    @if ($isAdmin)
                     <td>
                         <form method="POST" action="{{ route('admin.categories.destroy', $category) }}" style="margin:0;">
                             @csrf
@@ -62,6 +80,7 @@
                             <button type="submit" class="btn btn-danger">Xóa</button>
                         </form>
                     </td>
+                    @endif
                 </tr>
             @endforeach
         </tbody>

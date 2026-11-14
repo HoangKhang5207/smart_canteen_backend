@@ -12,6 +12,7 @@ use App\Models\Order;
 use App\Services\OrderService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class OrderController extends Controller
 {
@@ -21,10 +22,19 @@ class OrderController extends Controller
 
     public function index(Request $request): JsonResponse
     {
+        if ($request->filled('status') && is_string($request->input('status'))) {
+            $request->merge([
+                'status' => strtoupper(trim($request->input('status'))),
+            ]);
+        }
+
         $validated = $request->validate([
-            'status' => ['nullable', 'string'],
+            'status' => ['nullable', 'string', Rule::enum(OrderStatus::class)],
             'search' => ['nullable', 'string', 'max:64'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
+
+        $limit = isset($validated['limit']) ? (int) $validated['limit'] : 100;
 
         $query = Order::query()
             ->with(['user', 'items.product', 'statusLogs.actor'])
@@ -32,10 +42,7 @@ class OrderController extends Controller
             ->orderByDesc('id');
 
         if (! empty($validated['status'])) {
-            $status = OrderStatus::tryFrom(strtoupper(trim((string) $validated['status'])));
-            if ($status !== null) {
-                $query->where('status', $status->value);
-            }
+            $query->where('status', $validated['status']);
         }
 
         if (! empty($validated['search'])) {
@@ -43,7 +50,7 @@ class OrderController extends Controller
             $query->whereRaw('LOWER(code) LIKE ?', ['%'.$search.'%']);
         }
 
-        return OrderResource::collection($query->get())->response();
+        return OrderResource::collection($query->limit($limit)->get())->response();
     }
 
     public function updateStatus(UpdateOrderStatusRequest $request, int $id): JsonResponse

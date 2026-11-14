@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Admin\OrderController as AdminOrderController;
+use App\Http\Controllers\Api\V1\Admin\StatisticsController as AdminStatisticsController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CategoryController;
 use App\Http\Controllers\Api\V1\OrderController;
@@ -30,6 +31,7 @@ Route::prefix('v1')->group(function () {
         Route::prefix('admin')->middleware('role:staff,admin')->group(function () {
             Route::get('/orders', [AdminOrderController::class, 'index']);
             Route::patch('/orders/{id}/status', [AdminOrderController::class, 'updateStatus'])->whereNumber('id');
+            Route::get('/statistics', [AdminStatisticsController::class, 'index']);
         });
     });
 });

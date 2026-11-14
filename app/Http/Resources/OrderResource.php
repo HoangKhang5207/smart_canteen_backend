@@ -15,12 +15,14 @@ class OrderResource extends JsonResource
         return [
             'id' => $this->id,
             'user_id' => $this->user_id,
+            'customer_name' => $this->whenLoaded('user', fn () => $this->user?->name),
             'code' => $this->code,
             'status' => $status,
             'total_amount' => (int) $this->total_amount,
             'note' => $this->note,
             'version' => (int) $this->version,
             'items' => OrderItemResource::collection($this->whenLoaded('items')),
+            'status_logs' => OrderStatusLogResource::collection($this->whenLoaded('statusLogs')),
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];

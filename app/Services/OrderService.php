@@ -4,7 +4,10 @@ namespace App\Services;
 
 use App\Enums\OrderStatus;
 use App\Exceptions\IdempotencyConflictException;
+use App\Exceptions\InvalidOrderStatusTransitionException;
+use App\Exceptions\OrderVersionConflictException;
 use App\Models\Order;
+use App\Models\OrderStatusLog;
 use App\Models\Product;
 use App\Models\User;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -117,6 +120,51 @@ class OrderService
 
             return ['order' => $concurrent, 'created' => false];
         }
+    }
+
+    public function transitionStatus(
+        Order $order,
+        OrderStatus $nextStatus,
+        int $expectedVersion,
+        User $actor,
+    ): Order {
+        return DB::transaction(function () use ($order, $nextStatus, $expectedVersion, $actor): Order {
+            /** @var Order $lockedOrder */
+            $lockedOrder = Order::query()
+                ->whereKey($order->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ((int) $lockedOrder->version !== $expectedVersion) {
+                throw new OrderVersionConflictException(
+                    'Đơn hàng đã được nhân viên khác cập nhật trước đó. Vui lòng tải lại trang.',
+                );
+            }
+
+            $currentStatus = $lockedOrder->status instanceof OrderStatus
+                ? $lockedOrder->status
+                : OrderStatus::from((string) $lockedOrder->status);
+
+            if (! $currentStatus->canTransitionTo($nextStatus)) {
+                throw new InvalidOrderStatusTransitionException(
+                    sprintf('Không thể chuyển trạng thái đơn hàng từ %s sang %s.', $currentStatus->value, $nextStatus->value),
+                );
+            }
+
+            $lockedOrder->update([
+                'status' => $nextStatus,
+                'version' => (int) $lockedOrder->version + 1,
+            ]);
+
+            OrderStatusLog::create([
+                'order_id' => $lockedOrder->id,
+                'from_status' => $currentStatus,
+                'to_status' => $nextStatus,
+                'changed_by' => $actor->id,
+            ]);
+
+            return $lockedOrder->load(['user', 'items.product', 'statusLogs.actor']);
+        });
     }
 
     /**

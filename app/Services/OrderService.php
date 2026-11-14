@@ -45,21 +45,22 @@ class OrderService
 
         $productIds = array_map(fn (array $row) => (int) $row['product_id'], $items);
 
-        $products = Product::query()
-            ->whereHas('category', fn ($q) => $q->active())
-            ->where('is_available', true)
-            ->whereIn('id', $productIds)
-            ->get()
-            ->keyBy('id');
-
-        if ($products->count() !== count($productIds)) {
-            throw ValidationException::withMessages([
-                'items' => ['Một hoặc nhiều món ăn không tồn tại hoặc đã ngừng phục vụ.'],
-            ]);
-        }
-
         try {
-            $order = DB::transaction(function () use ($user, $items, $products, $normalizedNote, $idempotencyKey, $payloadHash): Order {
+            $order = DB::transaction(function () use ($user, $items, $productIds, $normalizedNote, $idempotencyKey, $payloadHash): Order {
+                $products = Product::query()
+                    ->whereHas('category', fn ($q) => $q->active())
+                    ->where('is_available', true)
+                    ->whereIn('id', $productIds)
+                    ->lockForUpdate()
+                    ->get()
+                    ->keyBy('id');
+
+                if ($products->count() !== count($productIds)) {
+                    throw ValidationException::withMessages([
+                        'items' => ['Một hoặc nhiều món ăn không tồn tại hoặc đã ngừng phục vụ.'],
+                    ]);
+                }
+
                 $totalAmount = 0;
                 $orderItemsPayload = [];
 

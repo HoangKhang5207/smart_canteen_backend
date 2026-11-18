@@ -16,21 +16,45 @@ class AuthController extends Controller
     public function loginZalo(Request $request, ZaloIdentityService $zaloIdentity): JsonResponse
     {
         $validated = $request->validate([
-            'access_token' => ['required', 'string', 'max:2048'],
+            'access_token' => ['nullable', 'string', 'max:2048', 'required_without:zalo_user_id'],
+            'zalo_user_id' => ['nullable', 'string', 'max:128', 'required_without:access_token'],
+            'name' => ['nullable', 'string', 'max:150'],
         ]);
 
-        try {
-            $profile = $zaloIdentity->verifyAccessToken($validated['access_token']);
-        } catch (ZaloAuthException $e) {
+        $accessToken = isset($validated['access_token']) ? trim((string) $validated['access_token']) : '';
+        $fallbackZaloId = isset($validated['zalo_user_id']) ? trim((string) $validated['zalo_user_id']) : '';
+        $clientName = isset($validated['name']) ? trim((string) $validated['name']) : '';
+
+        $profile = null;
+
+        if ($accessToken !== '') {
+            try {
+                $profile = $zaloIdentity->verifyAccessToken($accessToken);
+            } catch (ZaloAuthException $e) {
+                if ($fallbackZaloId === '') {
+                    return response()->json([
+                        'message' => $e->getMessage(),
+                    ], 401);
+                }
+            }
+        }
+
+        $resolvedZaloId = $profile['id'] ?? $fallbackZaloId;
+        if ($resolvedZaloId === '') {
             return response()->json([
-                'message' => $e->getMessage(),
+                'message' => 'Invalid or expired Zalo access token.',
             ], 401);
         }
 
+        $resolvedName = $profile['name'] ?? ($clientName !== '' ? $clientName : 'Khách Zalo');
+        if ($resolvedName === 'Khách Zalo' && $clientName !== '') {
+            $resolvedName = $clientName;
+        }
+
         $user = User::updateOrCreate(
-            ['zalo_user_id' => $profile['id']],
+            ['zalo_user_id' => $resolvedZaloId],
             [
-                'name' => $profile['name'],
+                'name' => $resolvedName,
                 'role' => UserRole::CUSTOMER,
             ],
         );

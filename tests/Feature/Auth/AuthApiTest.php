@@ -70,6 +70,45 @@ class AuthApiTest extends TestCase
         ])->assertStatus(401);
     }
 
+    public function test_zalo_login_supports_id_only_token_and_native_miniapp_user_id_when_demo_is_disabled(): void
+    {
+        config([
+            'services.demo.login_enabled' => false,
+            'services.zalo.app_secret' => 'test_zalo_secret_key',
+        ]);
+
+        // Case 1: SDK 2.35.0+ default token where Graph API returns only `id` (without `name`)
+        Http::fake([
+            'https://graph.zalo.me/*' => Http::response([
+                'id' => 'zalo_sdk235_user_001',
+            ], 200),
+        ]);
+
+        $res1 = $this->postJson('/api/v1/auth/zalo', [
+            'access_token' => 'sdk_235_token',
+            'name' => 'Hoàng Khang',
+        ]);
+
+        $res1->assertOk()
+            ->assertJsonPath('data.user.zalo_user_id', 'zalo_sdk235_user_001')
+            ->assertJsonPath('data.user.name', 'Hoàng Khang')
+            ->assertJsonPath('data.user.role', 'customer');
+
+        // Case 2: Zalo Mini App native bridge getUserID() (`zalo_user_id`) when OAuth token is not active yet
+        $res2 = $this->postJson('/api/v1/auth/zalo', [
+            'zalo_user_id' => 'zalo_mp_uid_888999',
+            'name' => 'Khách Zalo Thật',
+        ]);
+
+        $res2->assertOk()
+            ->assertJsonPath('data.user.zalo_user_id', 'zalo_mp_uid_888999')
+            ->assertJsonPath('data.user.name', 'Khách Zalo Thật')
+            ->assertJsonPath('data.user.role', 'customer');
+
+        // Case 3: Missing both access_token and zalo_user_id returns 422
+        $this->postJson('/api/v1/auth/zalo', [])->assertStatus(422);
+    }
+
     public function test_demo_login_succeeds_when_enabled_in_local_or_testing(): void
     {
         config(['services.demo.login_enabled' => true]);

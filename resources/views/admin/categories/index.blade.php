@@ -36,6 +36,25 @@
 @endif
 
 <div class="card">
+    <form method="GET" action="{{ route('admin.categories.index') }}" style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-end;">
+        <div style="flex: 1; min-width: 200px;">
+            <label for="search" style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Tìm tên danh mục</label>
+            <input id="search" type="text" name="search" value="{{ $search ?? '' }}" placeholder="Ví dụ: Cơm, Đồ uống...">
+        </div>
+        <div style="min-width: 140px;">
+            <label for="per_page" style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Số dòng / trang</label>
+            <select id="per_page" name="per_page">
+                @foreach ([5, 10, 20] as $size)
+                    <option value="{{ $size }}" {{ ($perPage ?? 10) === $size ? 'selected' : '' }}>{{ $size }} mục / trang</option>
+                @endforeach
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary">Lọc danh mục</button>
+        <a href="{{ route('admin.categories.index') }}" class="btn btn-secondary">Xóa lọc</a>
+    </form>
+</div>
+
+<div class="card">
     @if ($categories->isEmpty())
         <p style="color: var(--text-muted);">Không tìm thấy danh mục nào.</p>
     @else

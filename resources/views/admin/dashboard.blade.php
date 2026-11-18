@@ -7,7 +7,7 @@
 <div class="flex-between" style="margin-bottom: 1.25rem;">
     <div>
         <h1 style="font-size: 1.4rem; margin: 0;">Bảng điều hành hôm nay ({{ $summary['date'] }})</h1>
-        <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0.2rem 0 0;">Tự động làm mới mỗi 10 giây · Dữ liệu thời gian thực từ PostgreSQL</p>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0.2rem 0 0;">Tự động làm mới mỗi 10 giây</p>
     </div>
     <a href="{{ route('admin.orders.index') }}" class="btn btn-primary">Xem toàn bộ đơn hàng</a>
 </div>
@@ -42,63 +42,63 @@
     </div>
 
     @if ($activeOrders->isEmpty())
-        <p style="color: var(--text-muted); font-size: 0.9rem;">Hiện chưa có đơn hàng nào đang chờ xử lý.</p>
+    <p style="color: var(--text-muted); font-size: 0.9rem;">Hiện chưa có đơn hàng nào đang chờ xử lý.</p>
     @else
-        <table>
-            <thead>
-                <tr>
-                    <th>Mã đơn</th>
-                    <th>Khách hàng</th>
-                    <th>Món đặt</th>
-                    <th>Tổng tiền</th>
-                    <th>Trạng thái</th>
-                    <th>Thao tác nhanh</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach ($activeOrders as $order)
-                    @php
-                        $statusValue = $order->status instanceof \App\Enums\OrderStatus ? $order->status->value : (string) $order->status;
-                        $statusEnum = \App\Enums\OrderStatus::from($statusValue);
-                    @endphp
-                    <tr>
-                        <td>
-                            <a href="{{ route('admin.orders.show', $order) }}" style="font-weight: 700; color: var(--brand-700); text-decoration: none;">
-                                {{ $order->code }}
-                            </a>
-                            <div style="font-size: 0.75rem; color: var(--text-muted);">v{{ $order->version }}</div>
-                        </td>
-                        <td>{{ $order->user?->name ?? 'Khách' }}</td>
-                        <td>
-                            @foreach ($order->items as $item)
-                                <div>{{ $item->quantity }}x {{ $item->product?->name ?? 'Món #'.$item->product_id }}</div>
-                            @endforeach
-                            @if ($order->note)
-                                <div style="font-size: 0.75rem; color: #92400E;">Ghi chú: {{ $order->note }}</div>
-                            @endif
-                        </td>
-                        <td style="font-weight: 700;">{{ number_format($order->total_amount, 0, ',', '.') }} ₫</td>
-                        <td><span class="badge badge-{{ $statusValue }}">{{ $statusValue }}</span></td>
-                        <td>
-                            <div class="inline-actions">
-                                @foreach ($statusEnum->allowedTransitions() as $next)
-                                    <form method="POST" action="{{ route('admin.orders.status', $order) }}" style="margin:0;">
-                                        @csrf
-                                        @method('PATCH')
-                                        <input type="hidden" name="status" value="{{ $next->value }}">
-                                        <input type="hidden" name="version" value="{{ $order->version }}">
-                                        <button type="submit" class="btn {{ $next->value === 'CANCELLED' ? 'btn-danger' : 'btn-primary' }}">
-                                            → {{ $next->value }}
-                                        </button>
-                                    </form>
-                                @endforeach
-                                <a href="{{ route('admin.orders.show', $order) }}" class="btn btn-secondary">Chi tiết</a>
-                            </div>
-                        </td>
-                    </tr>
-                @endforeach
-            </tbody>
-        </table>
+    <table>
+        <thead>
+            <tr>
+                <th>Mã đơn</th>
+                <th>Khách hàng</th>
+                <th>Món đặt</th>
+                <th>Tổng tiền</th>
+                <th>Trạng thái</th>
+                <th>Thao tác nhanh</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach ($activeOrders as $order)
+            @php
+            $statusValue = $order->status instanceof \App\Enums\OrderStatus ? $order->status->value : (string) $order->status;
+            $statusEnum = \App\Enums\OrderStatus::from($statusValue);
+            @endphp
+            <tr>
+                <td>
+                    <a href="{{ route('admin.orders.show', $order) }}" style="font-weight: 700; color: var(--brand-700); text-decoration: none;">
+                        {{ $order->code }}
+                    </a>
+                    <div style="font-size: 0.75rem; color: var(--text-muted);">v{{ $order->version }}</div>
+                </td>
+                <td>{{ $order->user?->name ?? 'Khách' }}</td>
+                <td>
+                    @foreach ($order->items as $item)
+                    <div>{{ $item->quantity }}x {{ $item->product?->name ?? 'Món #'.$item->product_id }}</div>
+                    @endforeach
+                    @if ($order->note)
+                    <div style="font-size: 0.75rem; color: #92400E;">Ghi chú: {{ $order->note }}</div>
+                    @endif
+                </td>
+                <td style="font-weight: 700;">{{ number_format($order->total_amount, 0, ',', '.') }} ₫</td>
+                <td><span class="badge badge-{{ $statusValue }}">{{ $statusValue }}</span></td>
+                <td>
+                    <div class="inline-actions">
+                        @foreach ($statusEnum->allowedTransitions() as $next)
+                        <form method="POST" action="{{ route('admin.orders.status', $order) }}" style="margin:0;">
+                            @csrf
+                            @method('PATCH')
+                            <input type="hidden" name="status" value="{{ $next->value }}">
+                            <input type="hidden" name="version" value="{{ $order->version }}">
+                            <button type="submit" class="btn {{ $next->value === 'CANCELLED' ? 'btn-danger' : 'btn-primary' }}">
+                                → {{ $next->value }}
+                            </button>
+                        </form>
+                        @endforeach
+                        <a href="{{ route('admin.orders.show', $order) }}" class="btn btn-secondary">Chi tiết</a>
+                    </div>
+                </td>
+            </tr>
+            @endforeach
+        </tbody>
+    </table>
     @endif
 </section>
 @endsection

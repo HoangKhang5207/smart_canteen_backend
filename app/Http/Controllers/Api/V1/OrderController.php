@@ -17,12 +17,20 @@ class OrderController extends Controller
 {
     public function index(Request $request): AnonymousResourceCollection
     {
+        $validated = $request->validate([
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:50'],
+        ]);
+
+        $perPage = isset($validated['per_page']) ? (int) $validated['per_page'] : 10;
+
         $orders = Order::query()
             ->with('items.product')
             ->where('user_id', $request->user()->id)
             ->orderByDesc('created_at')
             ->orderByDesc('id')
-            ->get();
+            ->paginate($perPage)
+            ->withQueryString();
 
         return OrderResource::collection($orders);
     }

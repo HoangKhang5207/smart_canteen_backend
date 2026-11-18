@@ -12,16 +12,34 @@ use Illuminate\View\View;
 
 class ProductManagementController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
-        $products = Product::query()
+        $categoryId = (int) $request->query('category_id', 0);
+        $search = trim((string) $request->query('search', ''));
+        $requestedPerPage = (int) $request->query('per_page', 10);
+        $perPage = $requestedPerPage >= 1 && $requestedPerPage <= 100 ? $requestedPerPage : 10;
+
+        $query = Product::query()
             ->with('category')
             ->orderBy('category_id')
-            ->orderBy('id')
-            ->get();
+            ->orderBy('id');
+
+        if ($categoryId > 0) {
+            $query->where('category_id', $categoryId);
+        }
+
+        if ($search !== '') {
+            $normalized = mb_strtolower($search, 'UTF-8');
+            $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $normalized);
+            $query->whereRaw('LOWER(name) LIKE ?', ["%{$escaped}%"]);
+        }
 
         return view('admin.products.index', [
-            'products' => $products,
+            'products' => $query->paginate($perPage)->withQueryString(),
+            'categories' => Category::query()->orderBy('id')->get(),
+            'selectedCategoryId' => $categoryId > 0 ? $categoryId : null,
+            'search' => $search,
+            'perPage' => $perPage,
         ]);
     }
 

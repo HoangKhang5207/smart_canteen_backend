@@ -10,15 +10,26 @@ use Illuminate\View\View;
 
 class CategoryManagementController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
-        $categories = Category::query()
+        $search = trim((string) $request->query('search', ''));
+        $requestedPerPage = (int) $request->query('per_page', 10);
+        $perPage = $requestedPerPage >= 1 && $requestedPerPage <= 100 ? $requestedPerPage : 10;
+
+        $query = Category::query()
             ->withCount('products')
-            ->orderBy('id')
-            ->get();
+            ->orderBy('id');
+
+        if ($search !== '') {
+            $normalized = mb_strtolower($search, 'UTF-8');
+            $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $normalized);
+            $query->whereRaw('LOWER(name) LIKE ?', ["%{$escaped}%"]);
+        }
 
         return view('admin.categories.index', [
-            'categories' => $categories,
+            'categories' => $query->paginate($perPage)->withQueryString(),
+            'search' => $search,
+            'perPage' => $perPage,
         ]);
     }
 

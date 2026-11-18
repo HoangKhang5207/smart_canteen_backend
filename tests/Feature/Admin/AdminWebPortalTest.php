@@ -288,4 +288,70 @@ class AdminWebPortalTest extends TestCase
         ])->assertStatus(403);
         $this->actingAs($staff)->delete("/admin/products/{$product->id}")->assertStatus(403);
     }
+
+    public function test_admin_portal_paginates_and_filters_orders_products_and_categories(): void
+    {
+        $admin = User::factory()->create(['role' => UserRole::ADMIN]);
+        $customer = User::factory()->create(['name' => 'Khách Phân Trang']);
+
+        $catA = Category::factory()->create(['name' => 'Nhóm Cơm', 'is_active' => true]);
+        $catB = Category::factory()->create(['name' => 'Nhóm Phở', 'is_active' => true]);
+
+        for ($i = 1; $i <= 12; $i++) {
+            Product::factory()->for($catA)->create([
+                'name' => sprintf('Cơm phần số %02d', $i),
+                'price' => 40000,
+            ]);
+            Order::factory()->for($customer)->create([
+                'code' => sprintf('SC-261118-%06d', $i),
+                'status' => OrderStatus::PENDING,
+                'total_amount' => 40000,
+            ]);
+        }
+
+        Product::factory()->for($catB)->create([
+            'name' => 'Phở đặc biệt Hà Nội',
+            'price' => 55000,
+        ]);
+
+        // Orders page 1 (default 10 per page) vs page 2
+        $this->actingAs($admin)
+            ->get('/admin/orders?page=1&per_page=10')
+            ->assertOk()
+            ->assertSee('Trang 1/2')
+            ->assertSee('trong tổng số');
+
+        $this->actingAs($admin)
+            ->get('/admin/orders?page=2&per_page=10')
+            ->assertOk()
+            ->assertSee('Trang 2/2');
+
+        // Products page 1 vs page 2 and category filter
+        $this->actingAs($admin)
+            ->get('/admin/products?page=1&per_page=10')
+            ->assertOk()
+            ->assertSee('Trang 1/2')
+            ->assertSee('Cơm phần số 01')
+            ->assertDontSee('Phở đặc biệt Hà Nội');
+
+        $this->actingAs($admin)
+            ->get('/admin/products?page=2&per_page=10')
+            ->assertOk()
+            ->assertSee('Trang 2/2')
+            ->assertSee('Phở đặc biệt Hà Nội');
+
+        $this->actingAs($admin)
+            ->get("/admin/products?category_id={$catB->id}")
+            ->assertOk()
+            ->assertSee('Phở đặc biệt Hà Nội')
+            ->assertDontSee('Cơm phần số 01');
+
+        // Categories pagination summary
+        $this->actingAs($admin)
+            ->get('/admin/categories?per_page=10')
+            ->assertOk()
+            ->assertSee('Trang 1/1')
+            ->assertSee('Nhóm Cơm')
+            ->assertSee('Nhóm Phở');
+    }
 }

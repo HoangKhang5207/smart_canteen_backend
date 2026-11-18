@@ -23,6 +23,8 @@ class OrderManagementController extends Controller
     {
         $statusFilter = trim((string) $request->query('status', ''));
         $search = trim((string) $request->query('search', ''));
+        $requestedPerPage = (int) $request->query('per_page', 10);
+        $perPage = $requestedPerPage >= 1 && $requestedPerPage <= 100 ? $requestedPerPage : 10;
 
         $query = Order::query()
             ->with(['user', 'items.product'])
@@ -41,9 +43,10 @@ class OrderManagementController extends Controller
         }
 
         return view('admin.orders.index', [
-            'orders' => $query->limit(50)->get(),
+            'orders' => $query->paginate($perPage)->withQueryString(),
             'statusFilter' => strtoupper($statusFilter),
             'search' => $search,
+            'perPage' => $perPage,
         ]);
     }
 

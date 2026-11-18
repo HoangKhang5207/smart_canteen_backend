@@ -182,19 +182,32 @@ class AdminOrderApiTest extends TestCase
             ->assertOk()
             ->assertJsonCount(3, 'data');
 
-        // Explicit limit parameter restricts returned rows
+        // Explicit limit or per_page parameter restricts returned rows and returns pagination meta
         $this->getJson('/api/v1/admin/orders?limit=2')
             ->assertOk()
-            ->assertJsonCount(2, 'data');
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('meta.per_page', 2)
+            ->assertJsonPath('meta.total', 3)
+            ->assertJsonPath('meta.last_page', 2);
+
+        $this->getJson('/api/v1/admin/orders?page=2&per_page=2')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('meta.current_page', 2)
+            ->assertJsonPath('meta.total', 3);
 
         // Invalid status filter returns 422 instead of silently returning unfiltered rows
         $this->getJson('/api/v1/admin/orders?status=INVALID_STATE')
             ->assertStatus(422)
             ->assertJsonValidationErrors(['status']);
 
-        // Limit above 100 or below 1 returns 422
+        // Limit or per_page above 100 or below 1 returns 422
         $this->getJson('/api/v1/admin/orders?limit=101')
             ->assertStatus(422)
             ->assertJsonValidationErrors(['limit']);
+
+        $this->getJson('/api/v1/admin/orders?per_page=101')
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['per_page']);
     }
 }

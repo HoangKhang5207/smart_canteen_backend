@@ -36,54 +36,60 @@
 @endif
 
 <div class="card">
-    <table>
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Tên danh mục & Trạng thái</th>
-                <th>Số món ăn</th>
-                @if ($isAdmin)
-                <th>Xóa</th>
-                @endif
-            </tr>
-        </thead>
-        <tbody>
-            @foreach ($categories as $category)
+    @if ($categories->isEmpty())
+        <p style="color: var(--text-muted);">Không tìm thấy danh mục nào.</p>
+    @else
+        <table>
+            <thead>
                 <tr>
-                    <td>#{{ $category->id }}</td>
-                    <td>
-                        @if ($isAdmin)
-                            <form method="POST" action="{{ route('admin.categories.update', $category) }}" style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap; margin:0;">
-                                @csrf
-                                @method('PUT')
-                                <input type="text" name="name" value="{{ $category->name }}" required maxlength="100" style="max-width: 260px;">
-                                <input type="hidden" name="is_active" value="0">
-                                <label style="display:flex; align-items:center; gap:0.35rem; font-size:0.82rem;">
-                                    <input type="checkbox" name="is_active" value="1" {{ $category->is_active ? 'checked' : '' }}>
-                                    Đang hoạt động
-                                </label>
-                                <button type="submit" class="btn btn-secondary">Lưu</button>
-                            </form>
-                        @else
-                            <strong>{{ $category->name }}</strong>
-                            <span class="badge {{ $category->is_active ? 'badge-READY' : 'badge-CANCELLED' }}" style="margin-left: 0.5rem;">
-                                {{ $category->is_active ? 'Đang hoạt động' : 'Đang ẩn' }}
-                            </span>
-                        @endif
-                    </td>
-                    <td>{{ $category->products_count }} món</td>
+                    <th>ID</th>
+                    <th>Tên danh mục & Trạng thái</th>
+                    <th>Số món ăn</th>
                     @if ($isAdmin)
-                    <td>
-                        <form method="POST" action="{{ route('admin.categories.destroy', $category) }}" style="margin:0;">
-                            @csrf
-                            @method('DELETE')
-                            <button type="submit" class="btn btn-danger">Xóa</button>
-                        </form>
-                    </td>
+                    <th>Xóa</th>
                     @endif
                 </tr>
-            @endforeach
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+                @foreach ($categories as $category)
+                    <tr>
+                        <td>#{{ $category->id }}</td>
+                        <td>
+                            @if ($isAdmin)
+                                <form method="POST" action="{{ route('admin.categories.update', $category) }}" style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap; margin:0;">
+                                    @csrf
+                                    @method('PUT')
+                                    <input type="text" name="name" value="{{ $category->name }}" required maxlength="100" style="max-width: 260px;">
+                                    <input type="hidden" name="is_active" value="0">
+                                    <label style="display:flex; align-items:center; gap:0.35rem; font-size:0.82rem;">
+                                        <input type="checkbox" name="is_active" value="1" {{ $category->is_active ? 'checked' : '' }}>
+                                        Đang hoạt động
+                                    </label>
+                                    <button type="submit" class="btn btn-secondary">Lưu</button>
+                                </form>
+                            @else
+                                <strong>{{ $category->name }}</strong>
+                                <span class="badge {{ $category->is_active ? 'badge-READY' : 'badge-CANCELLED' }}" style="margin-left: 0.5rem;">
+                                    {{ $category->is_active ? 'Đang hoạt động' : 'Đang ẩn' }}
+                                </span>
+                            @endif
+                        </td>
+                        <td>{{ $category->products_count }} món</td>
+                        @if ($isAdmin)
+                        <td>
+                            <form method="POST" action="{{ route('admin.categories.destroy', $category) }}" style="margin:0;">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="btn btn-danger">Xóa</button>
+                            </form>
+                        </td>
+                        @endif
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+
+        @include('admin.partials.pagination', ['paginator' => $categories, 'label' => 'danh mục'])
+    @endif
 </div>
 @endsection

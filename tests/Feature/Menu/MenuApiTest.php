@@ -124,4 +124,29 @@ class MenuApiTest extends TestCase
         $this->getJson('/api/v1/products/999999')->assertNotFound();
         $this->getJson("/api/v1/products/{$hiddenProduct->id}")->assertNotFound();
     }
+
+    public function test_paginates_products_with_page_and_per_page_and_rejects_invalid_pagination_params(): void
+    {
+        $category = Category::factory()->create(['is_active' => true]);
+        Product::factory()->count(15)->for($category)->create(['is_available' => true]);
+
+        $page1 = $this->getJson('/api/v1/products?page=1&per_page=8');
+        $page1->assertOk()
+            ->assertJsonCount(8, 'data')
+            ->assertJsonPath('meta.current_page', 1)
+            ->assertJsonPath('meta.last_page', 2)
+            ->assertJsonPath('meta.per_page', 8)
+            ->assertJsonPath('meta.total', 15);
+
+        $page2 = $this->getJson('/api/v1/products?page=2&per_page=8');
+        $page2->assertOk()
+            ->assertJsonCount(7, 'data')
+            ->assertJsonPath('meta.current_page', 2)
+            ->assertJsonPath('meta.last_page', 2)
+            ->assertJsonPath('meta.total', 15);
+
+        $this->getJson('/api/v1/products?per_page=0')->assertStatus(422);
+        $this->getJson('/api/v1/products?per_page=101')->assertStatus(422);
+        $this->getJson('/api/v1/products?page=0')->assertStatus(422);
+    }
 }

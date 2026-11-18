@@ -13,6 +13,7 @@ class ProductController extends Controller
     public function index(ListProductsRequest $request): AnonymousResourceCollection
     {
         $validated = $request->validated();
+        $perPage = isset($validated['per_page']) ? (int) $validated['per_page'] : 12;
 
         $query = Product::query()
             ->whereHas('category', fn ($q) => $q->active())
@@ -29,7 +30,9 @@ class ProductController extends Controller
             $query->whereRaw('LOWER(name) LIKE ?', ["%{$escaped}%"]);
         }
 
-        return ProductResource::collection($query->get());
+        return ProductResource::collection(
+            $query->paginate($perPage)->withQueryString()
+        );
     }
 
     public function show(int $id): ProductResource

@@ -31,10 +31,12 @@ class OrderController extends Controller
         $validated = $request->validate([
             'status' => ['nullable', 'string', Rule::enum(OrderStatus::class)],
             'search' => ['nullable', 'string', 'max:64'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
-        $limit = isset($validated['limit']) ? (int) $validated['limit'] : 100;
+        $perPage = (int) ($validated['per_page'] ?? $validated['limit'] ?? 20);
 
         $query = Order::query()
             ->with(['user', 'items.product', 'statusLogs.actor'])
@@ -50,7 +52,9 @@ class OrderController extends Controller
             $query->whereRaw('LOWER(code) LIKE ?', ['%'.$search.'%']);
         }
 
-        return OrderResource::collection($query->limit($limit)->get())->response();
+        return OrderResource::collection(
+            $query->paginate($perPage)->withQueryString()
+        )->response();
     }
 
     public function updateStatus(UpdateOrderStatusRequest $request, int $id): JsonResponse

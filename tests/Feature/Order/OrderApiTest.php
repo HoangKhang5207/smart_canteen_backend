@@ -185,4 +185,29 @@ class OrderApiTest extends TestCase
         $this->getJson('/api/v1/orders')->assertStatus(401);
         $this->postJson('/api/v1/orders', [])->assertStatus(401);
     }
+
+    public function test_paginates_customer_orders_and_returns_meta(): void
+    {
+        $user = User::factory()->create(['role' => UserRole::CUSTOMER]);
+        Order::factory()->count(8)->for($user)->create();
+
+        Sanctum::actingAs($user);
+
+        $page1 = $this->getJson('/api/v1/orders?page=1&per_page=5');
+        $page1->assertOk()
+            ->assertJsonCount(5, 'data')
+            ->assertJsonPath('meta.current_page', 1)
+            ->assertJsonPath('meta.last_page', 2)
+            ->assertJsonPath('meta.per_page', 5)
+            ->assertJsonPath('meta.total', 8);
+
+        $page2 = $this->getJson('/api/v1/orders?page=2&per_page=5');
+        $page2->assertOk()
+            ->assertJsonCount(3, 'data')
+            ->assertJsonPath('meta.current_page', 2)
+            ->assertJsonPath('meta.last_page', 2)
+            ->assertJsonPath('meta.total', 8);
+
+        $this->getJson('/api/v1/orders?per_page=51')->assertStatus(422);
+    }
 }

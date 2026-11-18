@@ -16,6 +16,8 @@ class EndToEndDemoWorkflowTest extends TestCase
 
     public function test_full_eight_step_smart_canteen_demo_workflow_end_to_end(): void
     {
+        config(['services.demo.login_enabled' => true]);
+
         // Step 0: Seed mock categories, products, and staff/admin accounts (AC-01, AC-12)
         $this->seed(DatabaseSeeder::class);
 

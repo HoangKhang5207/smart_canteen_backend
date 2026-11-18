@@ -98,7 +98,25 @@ class ProductManagementController extends Controller
             'name' => ['required', 'string', 'max:150'],
             'description' => ['nullable', 'string', 'max:1000'],
             'price' => ['required', 'integer', 'min:1000', 'max:10000000'],
-            'image_url' => ['nullable', 'url', 'max:500'],
+            'image_url' => [
+                'nullable',
+                'string',
+                'max:500',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if ($value === null || trim((string) $value) === '') {
+                        return;
+                    }
+                    $trimmed = trim((string) $value);
+                    $isHttpUrl = filter_var($trimmed, FILTER_VALIDATE_URL) !== false
+                        && preg_match('/^https?:\/\//i', $trimmed) === 1;
+                    $isLocalImagePath = preg_match('/^\/images\/[a-zA-Z0-9_\-\/\.]+\.(jpg|jpeg|png|webp|svg)$/i', $trimmed) === 1
+                        && ! str_contains($trimmed, '..');
+
+                    if (! $isHttpUrl && ! $isLocalImagePath) {
+                        $fail('Đường dẫn hình ảnh phải là URL hợp lệ (http/https) hoặc đường dẫn nội bộ /images/products/<ten-file>.jpg.');
+                    }
+                },
+            ],
             'is_available' => ['nullable', 'boolean'],
         ]);
     }

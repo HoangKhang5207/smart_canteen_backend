@@ -191,14 +191,14 @@ class AdminWebPortalTest extends TestCase
             'subtotal' => 90000,
         ]);
 
-        // Admin updates product price to 55,000 and marks it unavailable
+        // Admin updates product price to 55,000, sets local image path, and marks it unavailable
         $this->actingAs($admin)
             ->put("/admin/products/{$product->id}", [
                 'category_id' => $category->id,
                 'name' => 'Cơm gà xối mỡ đặc biệt',
                 'description' => 'Đùi gà góc tư + trứng ốp la',
                 'price' => 55000,
-                'image_url' => 'https://example.com/com-ga.jpg',
+                'image_url' => '/images/products/com-ga-xoi-mo-gion-da.jpg',
                 'is_available' => '0',
             ])
             ->assertRedirect('/admin/products')
@@ -207,8 +207,22 @@ class AdminWebPortalTest extends TestCase
         $this->assertDatabaseHas('products', [
             'id' => $product->id,
             'price' => 55000,
+            'image_url' => '/images/products/com-ga-xoi-mo-gion-da.jpg',
             'is_available' => false,
         ]);
+
+        // Unsafe or malformed image_url is rejected with validation error
+        $this->actingAs($admin)
+            ->from("/admin/products/{$product->id}/edit")
+            ->put("/admin/products/{$product->id}", [
+                'category_id' => $category->id,
+                'name' => 'Cơm gà xối mỡ đặc biệt',
+                'price' => 55000,
+                'image_url' => 'javascript:alert(1)',
+                'is_available' => '1',
+            ])
+            ->assertRedirect("/admin/products/{$product->id}/edit")
+            ->assertSessionHasErrors('image_url');
 
         // Historical order item & total remain untouched (AC-11)
         $this->assertDatabaseHas('order_items', [

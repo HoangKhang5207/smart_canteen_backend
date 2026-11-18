@@ -24,6 +24,7 @@
         <thead>
             <tr>
                 <th>ID</th>
+                <th>Hình ảnh</th>
                 <th>Tên món</th>
                 <th>Danh mục</th>
                 <th>Giá bán (VND)</th>
@@ -38,9 +39,28 @@
                 <tr>
                     <td>#{{ $product->id }}</td>
                     <td>
+                        <div style="width: 48px; height: 48px; border-radius: 8px; overflow: hidden; background: var(--brand-50); border: 1px solid var(--brand-100); display: flex; align-items: center; justify-content: center;">
+                            @if ($product->image_url)
+                                <img
+                                    src="{{ $product->image_url }}"
+                                    alt="{{ $product->name }}"
+                                    loading="lazy"
+                                    style="width: 100%; height: 100%; object-fit: cover; object-position: center;"
+                                    onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                                >
+                                <span style="display: none; font-size: 0.65rem; font-weight: 700; color: var(--brand-700); text-align: center; padding: 2px;">SC</span>
+                            @else
+                                <span style="font-size: 0.65rem; font-weight: 700; color: var(--brand-700); text-align: center; padding: 2px;">SC</span>
+                            @endif
+                        </div>
+                    </td>
+                    <td>
                         <div style="font-weight: 700;">{{ $product->name }}</div>
                         @if ($product->description)
                             <div style="font-size: 0.78rem; color: var(--text-muted);">{{ $product->description }}</div>
+                        @endif
+                        @if ($product->image_url)
+                            <div style="font-size: 0.72rem; color: var(--brand-700); margin-top: 0.15rem;"><code>{{ $product->image_url }}</code></div>
                         @endif
                     </td>
                     <td>{{ $product->category?->name ?? '—' }}</td>

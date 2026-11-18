@@ -12,16 +12,21 @@ class MenuSeederTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_menu_seeder_creates_at_least_3_categories_and_10_products(): void
+    public function test_menu_seeder_creates_6_categories_and_30_products_with_standardized_image_paths(): void
     {
         $this->seed(MenuSeeder::class);
 
-        $this->assertGreaterThanOrEqual(3, Category::count());
-        $this->assertGreaterThanOrEqual(10, Product::count());
+        $this->assertSame(6, Category::count());
+        $this->assertSame(30, Product::count());
 
         Product::all()->each(function (Product $product): void {
             $this->assertGreaterThan(0, $product->price);
             $this->assertSame(0, $product->price % 1000);
+            $this->assertNotNull($product->image_url);
+            $this->assertMatchesRegularExpression(
+                '/^\/images\/products\/[a-z0-9\-]+\.jpg$/',
+                (string) $product->image_url,
+            );
         });
     }
 

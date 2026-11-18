@@ -43,8 +43,11 @@
             </div>
 
             <div style="margin-bottom: 1rem;">
-                <label for="image_url" style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.3rem;">URL hình ảnh (tùy chọn)</label>
-                <input id="image_url" type="url" name="image_url" value="{{ old('image_url', $product->image_url) }}" maxlength="500">
+                <label for="image_url" style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.3rem;">Đường dẫn hoặc URL hình ảnh (tùy chọn)</label>
+                <input id="image_url" type="text" name="image_url" value="{{ old('image_url', $product->image_url) }}" maxlength="500" placeholder="/images/products/com-suon-nuong-mat-ong.jpg hoặc https://...">
+                <p style="font-size: 0.78rem; color: var(--text-muted); margin: 0.35rem 0 0;">
+                    Đặt ảnh tải về vào thư mục <code>miniapp/public/images/products/&lt;ten-file&gt;.jpg</code> (và <code>api/public/images/products/</code>) rồi nhập <code>/images/products/&lt;ten-file&gt;.jpg</code>, hoặc dán trực tiếp URL <code>https://...</code>.
+                </p>
             </div>
 
             <div style="margin-bottom: 1.25rem;">

@@ -8,6 +8,80 @@ use Throwable;
 
 class ZaloIdentityService
 {
+    public function __construct(
+        private readonly PhoneNormalizer $phoneNormalizer,
+    ) {}
+
+    /**
+     * Resolve user phone number from Zalo Mini App getPhoneNumber() one-time token via server-to-server Graph API.
+     */
+    public function resolvePhoneNumber(string $accessToken, string $phoneToken): string
+    {
+        $secret = trim((string) config('services.zalo.app_secret', ''));
+        if ($secret === '') {
+            throw new ZaloAuthException(
+                'Hệ thống chưa cấu hình ZALO_APP_SECRET để xác thực số điện thoại Zalo.',
+                503,
+                'ZALO_CONFIG_MISSING',
+            );
+        }
+
+        try {
+            $response = Http::timeout(10)
+                ->withHeaders([
+                    'access_token' => $accessToken,
+                    'code' => $phoneToken,
+                    'secret_key' => $secret,
+                ])
+                ->get('https://graph.zalo.me/v2.0/me/info');
+        } catch (Throwable) {
+            throw new ZaloAuthException(
+                'Không thể kết nối tới Zalo Open API để xác thực số điện thoại.',
+                503,
+                'ZALO_UNAVAILABLE',
+            );
+        }
+
+        if ($response->serverError()) {
+            throw new ZaloAuthException(
+                'Zalo Open API tạm thời không phản hồi. Vui lòng thử lại sau.',
+                503,
+                'ZALO_UNAVAILABLE',
+            );
+        }
+
+        if (! $response->successful()) {
+            throw new ZaloAuthException(
+                'Mã xác thực số điện thoại Zalo không hợp lệ hoặc đã hết hạn.',
+                401,
+                'ZALO_PHONE_TOKEN_INVALID',
+            );
+        }
+
+        $payload = $response->json();
+        $errorCode = is_array($payload) && isset($payload['error']) ? (int) $payload['error'] : -1;
+        $rawNumber = is_array($payload) ? (string) ($payload['data']['number'] ?? '') : '';
+
+        if ($errorCode !== 0 || $rawNumber === '') {
+            throw new ZaloAuthException(
+                'Mã xác thực số điện thoại Zalo không hợp lệ hoặc đã hết hạn.',
+                401,
+                'ZALO_PHONE_TOKEN_INVALID',
+            );
+        }
+
+        $normalized = $this->phoneNormalizer->normalizeVietnamMobile($rawNumber);
+        if ($normalized === null) {
+            throw new ZaloAuthException(
+                'Số điện thoại từ Zalo không đúng định dạng di động Việt Nam hợp lệ.',
+                422,
+                'INVALID_PHONE_NUMBER',
+            );
+        }
+
+        return $normalized;
+    }
+
     /**
      * @return array{id: string, name: string}
      */

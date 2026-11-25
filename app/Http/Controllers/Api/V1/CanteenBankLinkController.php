@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Exceptions\BankLinkConflictException;
 use App\Exceptions\OtpVerificationException;
+use App\Exceptions\SmsDeliveryException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\InitiateBankLinkRequest;
 use App\Http\Requests\VerifyBankLinkOtpRequest;
@@ -32,6 +33,11 @@ class CanteenBankLinkController extends Controller
                 'message' => $e->getMessage(),
                 'error_code' => $e->errorCode,
             ], 409);
+        } catch (SmsDeliveryException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'error_code' => $e->errorCode,
+            ], $e->statusCode);
         }
     }
 
@@ -93,6 +99,11 @@ class CanteenBankLinkController extends Controller
             }
 
             return response()->json($body, $e->statusCode);
+        } catch (SmsDeliveryException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'error_code' => $e->errorCode,
+            ], $e->statusCode);
         }
     }
 
@@ -123,6 +134,11 @@ class CanteenBankLinkController extends Controller
             }
 
             return response()->json($body, $e->statusCode);
+        } catch (SmsDeliveryException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'error_code' => $e->errorCode,
+            ], $e->statusCode);
         }
     }
 
@@ -184,6 +200,11 @@ class CanteenBankLinkController extends Controller
             }
 
             return response()->json($body, $e->statusCode);
+        } catch (SmsDeliveryException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'error_code' => $e->errorCode,
+            ], $e->statusCode);
         }
     }
 }

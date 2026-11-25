@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Exceptions\CardNotLinkedException;
 use App\Exceptions\IdempotencyConflictException;
+use App\Exceptions\InsufficientBankBalanceException;
+use App\Exceptions\PaymentGatewayException;
 use App\Exceptions\SpendingLimitExceededException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StorePosPurchaseRequest;
@@ -44,6 +46,17 @@ class CanteenPosPurchaseController extends Controller
                 'error_code' => $e->errorCode,
                 'meta' => $e->meta,
             ], 422);
+        } catch (InsufficientBankBalanceException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'error_code' => $e->errorCode,
+                'meta' => $e->meta,
+            ], 422);
+        } catch (PaymentGatewayException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'error_code' => $e->errorCode,
+            ], $e->statusCode);
         }
 
         return (new OrderResource($result['order']))

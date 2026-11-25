@@ -33,13 +33,23 @@ return [
     ],
 
     'banking' => [
-        'driver' => env('BANKING_GATEWAY_DRIVER', 'mock'),
+        'driver' => env('BANKING_GATEWAY_DRIVER', 'sandbox'),
+        'webhook_secret' => env('BANKING_WEBHOOK_SECRET', ''),
+        'webhook_tolerance_seconds' => (int) env('BANKING_WEBHOOK_TOLERANCE_SECONDS', 300),
         'otp_ttl_seconds' => (int) env('BANKING_OTP_TTL_SECONDS', 180),
         'otp_resend_cooldown_seconds' => (int) env('BANKING_OTP_RESEND_COOLDOWN_SECONDS', 30),
         'otp_max_attempts' => (int) env('BANKING_OTP_MAX_ATTEMPTS', 5),
         'otp_max_resends' => (int) env('BANKING_OTP_MAX_RESENDS', 3),
         'expose_debug_otp' => filter_var(env('BANKING_EXPOSE_DEBUG_OTP', false), FILTER_VALIDATE_BOOL),
         'auto_provision_demo_card' => filter_var(env('BANKING_AUTO_PROVISION_DEMO_CARD', false), FILTER_VALIDATE_BOOL),
+    ],
+
+    'vnpay' => [
+        'tmn_code' => env('VNPAY_TMN_CODE', ''),
+        'hash_secret' => env('VNPAY_HASH_SECRET', ''),
+        'payment_url' => env('VNPAY_PAYMENT_URL', 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html'),
+        'return_url' => env('VNPAY_RETURN_URL', 'http://localhost:8080/api/v1/payments/vnpay/return'),
+        'sandbox_simulator_enabled' => filter_var(env('VNPAY_SANDBOX_SIMULATOR_ENABLED', false), FILTER_VALIDATE_BOOL),
     ],
 
     'sms' => [

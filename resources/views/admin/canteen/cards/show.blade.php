@@ -115,6 +115,34 @@
             @endif
         </div>
     </div>
+
+    @if ($sandboxControlsEnabled && $card->activeBankLink)
+    <div style="margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+        <h3 style="font-size: 0.9rem; margin: 0 0 0.5rem;">Cấu hình Tài khoản Ngân hàng Sandbox (Dev/QA)</h3>
+        <form method="POST" action="{{ route('admin.canteen.cards.sandbox', $card) }}" style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-end;">
+            @csrf
+            @method('PUT')
+            <div style="min-width: 180px;">
+                <label for="sandbox_balance" style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.2rem;">Số dư ngân hàng giả lập (VNĐ)</label>
+                <input id="sandbox_balance" type="number" name="balance" min="0" max="50000000" step="1000" value="{{ old('balance', $sandboxAccount?->balance ?? 500000) }}" required>
+            </div>
+            <div style="min-width: 210px;">
+                <label for="simulated_mode" style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.2rem;">Chế độ mô phỏng ngân hàng</label>
+                @php
+                    $currentMode = $sandboxAccount?->simulated_mode instanceof \App\Enums\SandboxBankMode
+                        ? $sandboxAccount->simulated_mode->value
+                        : 'NORMAL';
+                @endphp
+                <select id="simulated_mode" name="simulated_mode">
+                    @foreach (\App\Enums\SandboxBankMode::cases() as $mode)
+                        <option value="{{ $mode->value }}" {{ $currentMode === $mode->value ? 'selected' : '' }}>{{ $mode->value }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <button type="submit" class="btn btn-secondary">Cập nhật Sandbox</button>
+        </form>
+    </div>
+    @endif
 </div>
 @endif
 

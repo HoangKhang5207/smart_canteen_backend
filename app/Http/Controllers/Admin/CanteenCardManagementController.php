@@ -3,15 +3,18 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Enums\BankLinkStatus;
+use App\Enums\SandboxBankMode;
 use App\Enums\StudentCardStatus;
 use App\Exceptions\CardNotLinkedException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UpdateSpendingLimitRequest;
+use App\Models\SandboxBankAccount;
 use App\Models\StudentCard;
 use App\Services\SpendingLimitService;
 use App\Services\StudentCardService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -126,13 +129,78 @@ class CanteenCardManagementController extends Controller
             ->limit(15)
             ->get();
 
+        $sandboxControlsEnabled = $this->isSandboxDriverEnabled();
+        $sandboxAccount = $sandboxControlsEnabled && $studentCard->activeBankLink?->provider_reference
+            ? SandboxBankAccount::query()
+                ->where('provider_reference', $studentCard->activeBankLink->provider_reference)
+                ->first()
+            : null;
+
         return view('admin.canteen.cards.show', [
             'card' => $studentCard,
             'limitSummary' => $limitSummary,
             'bankLinkHistory' => $bankLinkHistory,
             'limitLogs' => $limitLogs,
             'recentOrders' => $recentOrders,
+            'sandboxAccount' => $sandboxAccount,
+            'sandboxControlsEnabled' => $sandboxControlsEnabled,
         ]);
+    }
+
+    public function updateSandboxAccount(Request $request, StudentCard $studentCard): RedirectResponse
+    {
+        abort_unless(
+            $this->isSandboxDriverEnabled(),
+            403,
+            'Cấu hình tài khoản Sandbox chỉ khả dụng khi BANKING_GATEWAY_DRIVER=sandbox trong môi trường phát triển/kiểm thử.',
+        );
+
+        $validated = $request->validate([
+            'balance' => ['required', 'integer', 'min:0', 'max:50000000'],
+            'simulated_mode' => ['required', 'string', Rule::enum(SandboxBankMode::class)],
+        ]);
+
+        $updated = DB::transaction(function () use ($studentCard, $validated): bool {
+            // Enforce canonical lock order: student_cards -> sandbox_bank_accounts
+            $lockedCard = StudentCard::query()
+                ->whereKey($studentCard->id)
+                ->lockForUpdate()
+                ->first();
+
+            $activeLink = $lockedCard?->activeBankLink()->first();
+            if ($activeLink === null || ! is_string($activeLink->provider_reference) || $activeLink->provider_reference === '') {
+                return false;
+            }
+
+            SandboxBankAccount::query()
+                ->where('provider_reference', $activeLink->provider_reference)
+                ->lockForUpdate()
+                ->first();
+
+            SandboxBankAccount::updateOrCreate(
+                ['provider_reference' => $activeLink->provider_reference],
+                [
+                    'bank_code' => $activeLink->bank_code,
+                    'account_number_masked' => $activeLink->account_number_masked,
+                    'balance' => (int) $validated['balance'],
+                    'simulated_mode' => SandboxBankMode::from((string) $validated['simulated_mode']),
+                ],
+            );
+
+            return true;
+        });
+
+        if (! $updated) {
+            return back()->with('error', 'Thẻ chưa có tài khoản ngân hàng liên kết để cấu hình Sandbox.');
+        }
+
+        return back()->with('status', 'Đã cập nhật số dư & chế độ mô phỏng tài khoản Sandbox.');
+    }
+
+    private function isSandboxDriverEnabled(): bool
+    {
+        return strtolower(trim((string) config('services.banking.driver', 'sandbox'))) === 'sandbox'
+            && ! app()->isProduction();
     }
 
     public function updateStatus(Request $request, StudentCard $studentCard): RedirectResponse

@@ -59,4 +59,18 @@ interface BankingGatewayInterface
      * @return array{refunded: bool, refund_reference: string}
      */
     public function refundAutoDebit(string $chargeReference, int $amountVnd, string $orderCode): array;
+
+    public function providerName(): string;
+
+    /**
+     * Fetch bank-side settled charge records for a given Vietnam calendar date (YYYY-MM-DD).
+     *
+     * @return list<array{
+     *     provider_reference: string,
+     *     order_code: string,
+     *     amount: int,
+     *     status: string
+     * }>
+     */
+    public function fetchSettlementStatement(string $date): array;
 }

@@ -6,11 +6,15 @@ use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
 use App\Exceptions\IdempotencyConflictException;
+use App\Exceptions\InsufficientBankBalanceException;
 use App\Exceptions\InvalidOrderStatusTransitionException;
 use App\Exceptions\OrderVersionConflictException;
+use App\Exceptions\PaymentGatewayException;
 use App\Models\Order;
 use App\Models\OrderStatusLog;
+use App\Models\PaymentTransaction;
 use App\Models\Product;
+use App\Models\SandboxBankAccount;
 use App\Models\SpendingLimit;
 use App\Models\StudentCard;
 use App\Models\User;
@@ -24,6 +28,7 @@ class OrderService
 {
     public function __construct(
         private readonly SpendingLimitService $spendingLimitService,
+        private readonly PaymentLedgerService $ledger,
     ) {}
 
     /**
@@ -68,6 +73,7 @@ class OrderService
         }
 
         $productIds = array_map(fn (array $row) => (int) $row['product_id'], $items);
+        $failedContext = ['card_id' => $effectiveCardId, 'bank_link_id' => null, 'amount' => 0];
 
         try {
             $order = DB::transaction(function () use (
@@ -79,8 +85,9 @@ class OrderService
                 $payloadHash,
                 $effectiveCardId,
                 $resolvedPaymentMethod,
+                &$failedContext,
             ): Order {
-                // Canonical lock order: student_cards -> spending_limits -> products -> orders
+                // Canonical lock order: student_cards -> spending_limits -> sandbox_bank_accounts -> products -> orders
                 $lockedCard = null;
                 $lockedLimitBundle = null;
 
@@ -97,14 +104,17 @@ class OrderService
                     }
 
                     $lockedLimitBundle = $this->spendingLimitService->lockCardLimitForPayment($lockedCard);
+                    $failedContext['bank_link_id'] = $lockedLimitBundle['bank_link']->id;
                 }
 
                 [$totalAmount, $orderItemsPayload] = $this->resolveAndLockProducts($items, $productIds);
+                $failedContext['amount'] = $totalAmount;
 
                 $tempCode = 'TMP-'.Str::random(16);
                 $paymentStatus = PaymentStatus::UNPAID;
                 $remainingSnapshot = null;
                 $paymentReference = null;
+                $paymentResult = null;
                 $storeName = $lockedCard !== null ? $lockedCard->student->school_name : 'Căn tin Smart Canteen';
 
                 $order = Order::create([
@@ -150,12 +160,48 @@ class OrderService
                     $order->items()->create($itemData);
                 }
 
+                if ($lockedLimitBundle !== null && $paymentResult !== null) {
+                    $this->ledger->recordChargeSuccess(
+                        order: $order,
+                        bankLink: $lockedLimitBundle['bank_link'],
+                        provider: $paymentResult['provider'],
+                        providerReference: $paymentResult['payment_reference'],
+                        idempotencyKey: $idempotencyKey,
+                    );
+                }
+
                 return $order->load(['items.product', 'studentCard.student']);
             });
 
             return ['order' => $order, 'created' => true];
-        } catch (UniqueConstraintViolationException) {
-            return $this->resolveIdempotentConflict($user, $idempotencyKey, $payloadHash);
+        } catch (InsufficientBankBalanceException $e) {
+            $this->ledger->recordFailedAttempt(
+                user: $user,
+                studentCardId: $failedContext['card_id'],
+                bankLinkId: $failedContext['bank_link_id'],
+                provider: $this->spendingLimitService->gatewayProviderName(),
+                amount: $failedContext['amount'],
+                status: 'FAILED',
+                failureCode: $e->errorCode,
+                failureMessage: $e->getMessage(),
+                idempotencyKey: $idempotencyKey,
+            );
+            throw $e;
+        } catch (PaymentGatewayException $e) {
+            $this->ledger->recordFailedAttempt(
+                user: $user,
+                studentCardId: $failedContext['card_id'],
+                bankLinkId: $failedContext['bank_link_id'],
+                provider: $this->spendingLimitService->gatewayProviderName(),
+                amount: $failedContext['amount'],
+                status: $e->transactionStatus,
+                failureCode: $e->errorCode,
+                failureMessage: $e->getMessage(),
+                idempotencyKey: $idempotencyKey,
+            );
+            throw $e;
+        } catch (UniqueConstraintViolationException $e) {
+            return $this->resolveIdempotentConflict($user, $idempotencyKey, $payloadHash, $e);
         }
     }
 
@@ -195,6 +241,7 @@ class OrderService
         }
 
         $productIds = array_map(fn (array $row) => (int) $row['product_id'], $items);
+        $failedContext = ['card_id' => $cardId, 'bank_link_id' => null, 'amount' => 0];
 
         try {
             $order = DB::transaction(function () use (
@@ -205,8 +252,9 @@ class OrderService
                 $normalizedStore,
                 $idempotencyKey,
                 $payloadHash,
+                &$failedContext,
             ): Order {
-                // Canonical lock order: student_cards -> spending_limits -> products -> orders
+                // Canonical lock order: student_cards -> spending_limits -> sandbox_bank_accounts -> products -> orders
                 /** @var StudentCard|null $lockedCard */
                 $lockedCard = StudentCard::query()
                     ->with('student')
@@ -220,7 +268,10 @@ class OrderService
                 }
 
                 $lockedLimitBundle = $this->spendingLimitService->lockCardLimitForPayment($lockedCard);
+                $failedContext['bank_link_id'] = $lockedLimitBundle['bank_link']->id;
+
                 [$totalAmount, $orderItemsPayload] = $this->resolveAndLockProducts($items, $productIds);
+                $failedContext['amount'] = $totalAmount;
 
                 $order = Order::create([
                     'user_id' => $user->id,
@@ -259,12 +310,46 @@ class OrderService
                     $order->items()->create($itemData);
                 }
 
+                $this->ledger->recordChargeSuccess(
+                    order: $order,
+                    bankLink: $lockedLimitBundle['bank_link'],
+                    provider: $paymentResult['provider'],
+                    providerReference: $paymentResult['payment_reference'],
+                    idempotencyKey: $idempotencyKey,
+                );
+
                 return $order->load(['items.product', 'studentCard.student']);
             });
 
             return ['order' => $order, 'created' => true];
-        } catch (UniqueConstraintViolationException) {
-            return $this->resolveIdempotentConflict($user, $idempotencyKey, $payloadHash);
+        } catch (InsufficientBankBalanceException $e) {
+            $this->ledger->recordFailedAttempt(
+                user: $user,
+                studentCardId: $failedContext['card_id'],
+                bankLinkId: $failedContext['bank_link_id'],
+                provider: $this->spendingLimitService->gatewayProviderName(),
+                amount: $failedContext['amount'],
+                status: 'FAILED',
+                failureCode: $e->errorCode,
+                failureMessage: $e->getMessage(),
+                idempotencyKey: $idempotencyKey,
+            );
+            throw $e;
+        } catch (PaymentGatewayException $e) {
+            $this->ledger->recordFailedAttempt(
+                user: $user,
+                studentCardId: $failedContext['card_id'],
+                bankLinkId: $failedContext['bank_link_id'],
+                provider: $this->spendingLimitService->gatewayProviderName(),
+                amount: $failedContext['amount'],
+                status: $e->transactionStatus,
+                failureCode: $e->errorCode,
+                failureMessage: $e->getMessage(),
+                idempotencyKey: $idempotencyKey,
+            );
+            throw $e;
+        } catch (UniqueConstraintViolationException $e) {
+            return $this->resolveIdempotentConflict($user, $idempotencyKey, $payloadHash, $e);
         }
     }
 
@@ -277,9 +362,26 @@ class OrderService
         $studentCardId = $nextStatus === OrderStatus::CANCELLED
             ? Order::query()->whereKey($order->id)->value('student_card_id')
             : null;
+        $sandboxBankProviderRef = null;
+        if ($nextStatus === OrderStatus::CANCELLED && $studentCardId !== null) {
+            $chargeTx = PaymentTransaction::query()
+                ->with('bankLink:id,provider_reference')
+                ->where('order_id', $order->id)
+                ->where('type', 'CHARGE')
+                ->latest('id')
+                ->first();
+            $sandboxBankProviderRef = $chargeTx?->bankLink?->provider_reference;
+        }
 
-        return DB::transaction(function () use ($order, $nextStatus, $expectedVersion, $actor, $studentCardId): Order {
-            // Preserve canonical lock order: student_cards -> spending_limits -> orders
+        return DB::transaction(function () use (
+            $order,
+            $nextStatus,
+            $expectedVersion,
+            $actor,
+            $studentCardId,
+            $sandboxBankProviderRef,
+        ): Order {
+            // Preserve canonical lock order: student_cards -> spending_limits -> sandbox_bank_accounts -> orders -> payment_transactions
             $lockedLimit = null;
             if ($studentCardId !== null) {
                 StudentCard::query()->whereKey($studentCardId)->lockForUpdate()->first();
@@ -287,6 +389,13 @@ class OrderService
                     ->where('student_card_id', $studentCardId)
                     ->lockForUpdate()
                     ->first();
+
+                if (is_string($sandboxBankProviderRef) && $sandboxBankProviderRef !== '') {
+                    SandboxBankAccount::query()
+                        ->where('provider_reference', $sandboxBankProviderRef)
+                        ->lockForUpdate()
+                        ->first();
+                }
             }
 
             /** @var Order $lockedOrder */
@@ -378,13 +487,21 @@ class OrderService
     /**
      * @return array{order: Order, created: bool}
      */
-    private function resolveIdempotentConflict(User $user, string $idempotencyKey, string $payloadHash): array
-    {
+    private function resolveIdempotentConflict(
+        User $user,
+        string $idempotencyKey,
+        string $payloadHash,
+        UniqueConstraintViolationException $originalException,
+    ): array {
         $concurrent = Order::query()
             ->with(['items.product', 'studentCard.student'])
             ->where('user_id', $user->id)
             ->where('idempotency_key', $idempotencyKey)
-            ->firstOrFail();
+            ->first();
+
+        if ($concurrent === null) {
+            throw $originalException;
+        }
 
         if ($concurrent->payload_hash !== $payloadHash) {
             throw new IdempotencyConflictException(

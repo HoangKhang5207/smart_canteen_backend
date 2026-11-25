@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\Admin\OrderController as AdminOrderController;
 use App\Http\Controllers\Api\V1\Admin\StatisticsController as AdminStatisticsController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\BankingWebhookController;
 use App\Http\Controllers\Api\V1\CanteenBankController;
 use App\Http\Controllers\Api\V1\CanteenBankLinkController;
 use App\Http\Controllers\Api\V1\CanteenCardController;
@@ -11,6 +12,7 @@ use App\Http\Controllers\Api\V1\CanteenSpendingLimitController;
 use App\Http\Controllers\Api\V1\CategoryController;
 use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\ProductController;
+use App\Http\Controllers\Api\V1\VnpayPaymentController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -29,6 +31,11 @@ Route::prefix('v1')->group(function () {
     Route::get('/products/{id}', [ProductController::class, 'show'])->whereNumber('id');
     Route::get('/canteen/banks', [CanteenBankController::class, 'index']);
 
+    Route::post('/webhooks/banking/sandbox', [BankingWebhookController::class, 'handleSandbox'])
+        ->middleware('throttle:60,1');
+    Route::get('/payments/vnpay/ipn', [VnpayPaymentController::class, 'ipn'])->middleware('throttle:60,1');
+    Route::get('/payments/vnpay/return', [VnpayPaymentController::class, 'returnUrl'])->middleware('throttle:60,1');
+
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/auth/me', [AuthController::class, 'me']);
         Route::post('/auth/logout', [AuthController::class, 'logout']);
@@ -36,6 +43,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/orders', [OrderController::class, 'index']);
         Route::post('/orders', [OrderController::class, 'store']);
         Route::get('/orders/{id}', [OrderController::class, 'show'])->whereNumber('id');
+        Route::post('/payments/vnpay/create-url', [VnpayPaymentController::class, 'createUrl'])->middleware('throttle:20,1');
 
         Route::prefix('canteen')->group(function () {
             Route::get('/cards', [CanteenCardController::class, 'index']);

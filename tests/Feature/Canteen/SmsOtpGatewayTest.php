@@ -221,4 +221,47 @@ class SmsOtpGatewayTest extends TestCase
         ])->assertStatus(503)
             ->assertJsonPath('error_code', 'SMS_DELIVERY_FAILED');
     }
+
+    public function test_sms_failure_rolls_back_resend_otp_and_initiate_unlink_cleanly(): void
+    {
+        config()->set('services.sms.driver', 'log');
+        config()->set('services.banking.expose_debug_otp', true);
+        config()->set('services.banking.otp_resend_cooldown_seconds', 5);
+
+        $parent = User::factory()->create();
+        $card = $this->createCard($parent);
+        Sanctum::actingAs($parent);
+
+        $init = $this->postJson("/api/v1/canteen/cards/{$card->id}/bank-links", [
+            'bank_code' => 'MB',
+            'account_number' => '123456789012',
+            'account_holder_name' => 'PHAM THI E',
+            'national_id' => '079090001238',
+            'phone_number' => '0901234567',
+            'agreed_terms' => true,
+        ])->assertCreated();
+
+        $linkId = (int) $init->json('data.bank_link_id');
+        $validOtp = (string) $init->json('data.otp.debug_otp');
+
+        // Force SMS failure on resend-otp -> 503 and resend_count remains 0 (not incremented!)
+        $this->travel(10)->seconds();
+        config()->set('services.sms.driver', 'esms');
+        config()->set('services.sms.esms.api_key', '');
+        $this->postJson("/api/v1/canteen/bank-links/{$linkId}/resend-otp")
+            ->assertStatus(503)
+            ->assertJsonPath('error_code', 'SMS_DELIVERY_FAILED');
+
+        $this->assertSame(1, OtpVerification::where('bank_link_id', $linkId)->count());
+        $this->assertSame(0, OtpVerification::where('bank_link_id', $linkId)->first()->resend_count);
+
+        // Complete bank link, then force SMS failure on unlink/initiate -> 503 & no unlink OTP row created
+        $this->postJson("/api/v1/canteen/bank-links/{$linkId}/verify-otp", ['otp_code' => $validOtp])->assertOk();
+
+        $this->postJson("/api/v1/canteen/bank-links/{$linkId}/unlink/initiate")
+            ->assertStatus(503)
+            ->assertJsonPath('error_code', 'SMS_DELIVERY_FAILED');
+
+        $this->assertSame(0, OtpVerification::where('bank_link_id', $linkId)->where('purpose', 'BANK_UNLINK')->count());
+    }
 }

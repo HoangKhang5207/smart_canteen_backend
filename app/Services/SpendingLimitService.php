@@ -4,12 +4,15 @@ namespace App\Services;
 
 use App\Contracts\BankingGatewayInterface;
 use App\Enums\BankLinkStatus;
+use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
 use App\Enums\StudentCardStatus;
 use App\Exceptions\CardNotLinkedException;
 use App\Exceptions\SpendingLimitExceededException;
 use App\Models\BankLink;
 use App\Models\Order;
+use App\Models\PaymentTransaction;
+use App\Models\SandboxBankAccount;
 use App\Models\SpendingLimit;
 use App\Models\SpendingLimitLog;
 use App\Models\StudentCard;
@@ -25,7 +28,13 @@ class SpendingLimitService
 
     public function __construct(
         private readonly BankingGatewayInterface $gateway,
+        private readonly PaymentLedgerService $ledger,
     ) {}
+
+    public function gatewayProviderName(): string
+    {
+        return $this->gateway->providerName();
+    }
 
     public function todayDate(): string
     {
@@ -207,7 +216,8 @@ class SpendingLimitService
     }
 
     /**
-     * Lock spending_limits right after student_cards (canonical order: student_cards -> spending_limits -> products -> orders).
+     * Lock spending_limits and sandbox_bank_accounts right after student_cards
+     * (canonical order: student_cards -> spending_limits -> sandbox_bank_accounts -> products -> orders -> payment_transactions).
      *
      * @return array{limit: SpendingLimit, bank_link: BankLink}
      */
@@ -246,6 +256,13 @@ class SpendingLimitService
                 'spent_today' => 0,
                 'spent_date' => $today,
             ]);
+        }
+
+        if (is_string($activeBankLink->provider_reference) && $activeBankLink->provider_reference !== '') {
+            SandboxBankAccount::query()
+                ->where('provider_reference', $activeBankLink->provider_reference)
+                ->lockForUpdate()
+                ->first();
         }
 
         return [
@@ -301,20 +318,56 @@ class SpendingLimitService
         return [
             'remaining_limit_snapshot' => max(0, $dailyLimit - $newSpent),
             'payment_reference' => $charge['charge_reference'],
+            'provider' => $this->gateway->providerName(),
         ];
     }
 
     public function refundForCancelledOrder(Order $lockedOrder, ?SpendingLimit $lockedLimit = null): void
     {
-        if ($lockedOrder->student_card_id === null || $lockedOrder->payment_status !== PaymentStatus::PAID) {
+        if ($lockedOrder->payment_status !== PaymentStatus::PAID) {
+            return;
+        }
+
+        if ($lockedOrder->payment_method === PaymentMethod::VNPAY) {
+            // Paid VNPay orders require manual/gateway refund reconciliation
+            $lockedOrder->update([
+                'payment_status' => PaymentStatus::PENDING_RECONCILE,
+            ]);
+
+            return;
+        }
+
+        if (
+            ! in_array($lockedOrder->payment_method, [PaymentMethod::STUDENT_CARD, PaymentMethod::STUDENT_CARD_POS], true)
+            || $lockedOrder->student_card_id === null
+        ) {
             return;
         }
 
         if ($lockedOrder->payment_reference !== null) {
-            $this->gateway->refundAutoDebit(
+            $originalChargeTx = PaymentTransaction::query()
+                ->where('order_id', $lockedOrder->id)
+                ->where('type', 'CHARGE')
+                ->where('provider_reference', $lockedOrder->payment_reference)
+                ->first();
+
+            $refundResult = $this->gateway->refundAutoDebit(
                 (string) $lockedOrder->payment_reference,
                 (int) $lockedOrder->total_amount,
                 $lockedOrder->code,
+            );
+
+            $bankLinkId = $originalChargeTx?->bank_link_id
+                ?? BankLink::query()
+                    ->where('student_card_id', $lockedOrder->student_card_id)
+                    ->latest('id')
+                    ->value('id');
+
+            $this->ledger->recordRefundSuccess(
+                order: $lockedOrder,
+                bankLinkId: $bankLinkId !== null ? (int) $bankLinkId : null,
+                provider: $originalChargeTx?->provider ?? $this->gateway->providerName(),
+                refundReference: $refundResult['refund_reference'],
             );
         }
 

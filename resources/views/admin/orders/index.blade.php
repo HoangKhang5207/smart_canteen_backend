@@ -47,9 +47,9 @@
         <thead>
             <tr>
                 <th>Mã đơn</th>
-                <th>Khách hàng</th>
+                <th>Khách hàng / Thẻ HS</th>
                 <th>Chi tiết món</th>
-                <th>Tổng tiền</th>
+                <th>Tổng tiền & Thanh toán</th>
                 <th>Trạng thái</th>
                 <th>Cập nhật trạng thái</th>
             </tr>
@@ -59,21 +59,41 @@
             @php
             $statusValue = $order->status instanceof \App\Enums\OrderStatus ? $order->status->value : (string) $order->status;
             $statusEnum = \App\Enums\OrderStatus::from($statusValue);
+            $paymentMethodEnum = $order->payment_method instanceof \App\Enums\PaymentMethod
+                ? $order->payment_method
+                : (\App\Enums\PaymentMethod::tryFrom((string) $order->payment_method) ?? \App\Enums\PaymentMethod::COUNTER_CASH);
+            $paymentStatusVal = $order->payment_status instanceof \App\Enums\PaymentStatus ? $order->payment_status->value : (string) $order->payment_status;
             @endphp
             <tr>
                 <td>
                     <a href="{{ route('admin.orders.show', $order) }}" style="font-weight: 700; color: var(--brand-700); text-decoration: none;">
                         {{ $order->code }}
                     </a>
-                    <div style="font-size: 0.75rem; color: var(--text-muted);">{{ $order->created_at?->format('H:i:s d/m') }} · v{{ $order->version }}</div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted);">{{ $order->created_at?->timezone('Asia/Ho_Chi_Minh')->format('H:i:s d/m') }} · v{{ $order->version }}</div>
                 </td>
-                <td>{{ $order->user?->name ?? 'Khách' }}</td>
+                <td>
+                    <div>{{ $order->user?->name ?? 'Khách' }}</div>
+                    @if ($order->studentCard)
+                        <div style="font-size: 0.76rem; color: var(--brand-700);">
+                            <a href="{{ route('admin.canteen.cards.show', $order->studentCard) }}" style="color: var(--brand-700); font-weight: 600; text-decoration: none;">
+                                Thẻ {{ $order->studentCard->card_code }}
+                            </a>
+                            · {{ $order->studentCard->student?->full_name }} ({{ $order->studentCard->student?->class_name }})
+                        </div>
+                    @endif
+                </td>
                 <td>
                     @foreach ($order->items as $item)
                     <div>{{ $item->quantity }}x {{ $item->product?->name ?? 'Món #'.$item->product_id }}</div>
                     @endforeach
                 </td>
-                <td style="font-weight: 700;">{{ number_format($order->total_amount, 0, ',', '.') }} ₫</td>
+                <td>
+                    <div style="font-weight: 700;">{{ number_format($order->total_amount, 0, ',', '.') }} ₫</div>
+                    <div style="font-size: 0.75rem; margin-top: 0.15rem;">
+                        <span>{{ $paymentMethodEnum->label() }}</span> ·
+                        <span class="badge badge-{{ $paymentStatusVal }}">{{ $paymentStatusVal }}</span>
+                    </div>
+                </td>
                 <td><span class="badge badge-{{ $statusValue }}">{{ $statusValue }}</span></td>
                 <td>
                     <div class="inline-actions">

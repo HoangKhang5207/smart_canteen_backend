@@ -95,4 +95,85 @@ class CanteenBankLinkController extends Controller
             return response()->json($body, $e->statusCode);
         }
     }
+
+    public function initiateUnlink(
+        Request $request,
+        int $bankLinkId,
+        BankLinkingService $bankLinkingService,
+    ): JsonResponse {
+        try {
+            $data = $bankLinkingService->initiateUnlink(
+                user: $request->user(),
+                bankLinkId: $bankLinkId,
+            );
+
+            return response()->json(['data' => $data], 201);
+        } catch (BankLinkConflictException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'error_code' => $e->errorCode,
+            ], 409);
+        }
+    }
+
+    public function verifyUnlinkOtp(
+        VerifyBankLinkOtpRequest $request,
+        int $bankLinkId,
+        BankLinkingService $bankLinkingService,
+    ): JsonResponse|StudentCardResource {
+        try {
+            $card = $bankLinkingService->verifyUnlinkOtp(
+                user: $request->user(),
+                bankLinkId: $bankLinkId,
+                otpCode: (string) $request->validated('otp_code'),
+            );
+
+            return new StudentCardResource($card);
+        } catch (BankLinkConflictException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'error_code' => $e->errorCode,
+            ], 409);
+        } catch (OtpVerificationException $e) {
+            $body = [
+                'message' => $e->getMessage(),
+                'error_code' => $e->errorCode,
+            ];
+            if ($e->meta !== []) {
+                $body['meta'] = $e->meta;
+            }
+
+            return response()->json($body, $e->statusCode);
+        }
+    }
+
+    public function resendUnlinkOtp(
+        Request $request,
+        int $bankLinkId,
+        BankLinkingService $bankLinkingService,
+    ): JsonResponse {
+        try {
+            $data = $bankLinkingService->resendUnlinkOtp(
+                user: $request->user(),
+                bankLinkId: $bankLinkId,
+            );
+
+            return response()->json(['data' => $data]);
+        } catch (BankLinkConflictException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'error_code' => $e->errorCode,
+            ], 409);
+        } catch (OtpVerificationException $e) {
+            $body = [
+                'message' => $e->getMessage(),
+                'error_code' => $e->errorCode,
+            ];
+            if ($e->meta !== []) {
+                $body['meta'] = $e->meta;
+            }
+
+            return response()->json($body, $e->statusCode);
+        }
+    }
 }

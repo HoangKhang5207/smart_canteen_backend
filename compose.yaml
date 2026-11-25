@@ -25,9 +25,6 @@ services:
       dockerfile: Dockerfile
       target: ${BUILD_TARGET:-dev}
     restart: unless-stopped
-    env_file:
-      - path: .env
-        required: false
     environment:
       APP_ENV: ${APP_ENV:-local}
       APP_DEBUG: ${APP_DEBUG:-true}

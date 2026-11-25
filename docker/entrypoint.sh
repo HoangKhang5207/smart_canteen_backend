@@ -15,7 +15,11 @@ if [ "${APP_ENV:-local}" != "production" ] && [ ! -f /var/www/html/vendor/autolo
     composer install --no-interaction --prefer-dist
 fi
 
-if [ "${APP_ENV:-local}" = "production" ] && [ -n "${APP_KEY:-}" ]; then
+if [ "${APP_ENV:-local}" = "production" ]; then
+    if [ -z "${APP_KEY:-}" ]; then
+        echo "ERROR: APP_KEY must be set when APP_ENV=production." >&2
+        exit 1
+    fi
     php /var/www/html/artisan config:cache
     php /var/www/html/artisan route:cache
     php /var/www/html/artisan view:cache

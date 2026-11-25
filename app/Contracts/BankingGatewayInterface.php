@@ -49,4 +49,14 @@ interface BankingGatewayInterface
      * @return array{unlinked: bool, provider_reference: string}
      */
     public function unlinkAutoDebit(string $providerReference): array;
+
+    /**
+     * @return array{charged: bool, charge_reference: string}
+     */
+    public function chargeAutoDebit(string $providerReference, int $amountVnd, string $orderCode): array;
+
+    /**
+     * @return array{refunded: bool, refund_reference: string}
+     */
+    public function refundAutoDebit(string $chargeReference, int $amountVnd, string $orderCode): array;
 }

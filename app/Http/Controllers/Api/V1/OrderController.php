@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Enums\PaymentMethod;
+use App\Exceptions\CardNotLinkedException;
 use App\Exceptions\IdempotencyConflictException;
+use App\Exceptions\SpendingLimitExceededException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreOrderRequest;
 use App\Http\Resources\OrderResource;
@@ -25,7 +28,7 @@ class OrderController extends Controller
         $perPage = isset($validated['per_page']) ? (int) $validated['per_page'] : 10;
 
         $orders = Order::query()
-            ->with('items.product')
+            ->with(['items.product', 'studentCard.student'])
             ->where('user_id', $request->user()->id)
             ->orderByDesc('created_at')
             ->orderByDesc('id')
@@ -38,6 +41,10 @@ class OrderController extends Controller
     public function store(StoreOrderRequest $request, OrderService $orderService): JsonResponse
     {
         $validated = $request->validated();
+        $studentCardId = isset($validated['student_card_id']) ? (int) $validated['student_card_id'] : null;
+        $paymentMethod = isset($validated['payment_method'])
+            ? PaymentMethod::from((string) $validated['payment_method'])
+            : null;
 
         try {
             $result = $orderService->createOrder(
@@ -45,11 +52,24 @@ class OrderController extends Controller
                 $validated['items'],
                 $validated['note'] ?? null,
                 $validated['idempotency_key'],
+                $studentCardId,
+                $paymentMethod,
             );
         } catch (IdempotencyConflictException $e) {
             return response()->json([
                 'message' => $e->getMessage(),
             ], 409);
+        } catch (CardNotLinkedException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'error_code' => $e->errorCode,
+            ], 422);
+        } catch (SpendingLimitExceededException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'error_code' => $e->errorCode,
+                'meta' => $e->meta,
+            ], 422);
         }
 
         return (new OrderResource($result['order']))
@@ -60,7 +80,7 @@ class OrderController extends Controller
     public function show(Request $request, int $id): OrderResource
     {
         $order = Order::query()
-            ->with('items.product')
+            ->with(['items.product', 'studentCard.student'])
             ->findOrFail($id);
 
         if (! Gate::forUser($request->user())->allows('view', $order)) {

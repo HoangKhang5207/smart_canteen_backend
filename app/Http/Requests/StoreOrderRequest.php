@@ -27,6 +27,8 @@ class StoreOrderRequest extends FormRequest
             'items.*.product_id' => ['required', 'integer', 'distinct'],
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:20'],
             'note' => ['nullable', 'string', 'max:500'],
+            'student_card_id' => ['nullable', 'integer', 'min:1'],
+            'payment_method' => ['nullable', 'string', 'in:COUNTER_CASH,STUDENT_CARD'],
         ];
     }
 }

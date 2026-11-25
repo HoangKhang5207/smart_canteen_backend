@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\StudentCard;
+use App\Services\SpendingLimitService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -17,6 +18,7 @@ class StudentCardResource extends JsonResource
     public function toArray(Request $request): array
     {
         $activeLink = $this->activeBankLink;
+        $limitSummary = app(SpendingLimitService::class)->summarize($this->spendingLimit);
 
         return [
             'id' => $this->id,
@@ -26,6 +28,7 @@ class StudentCardResource extends JsonResource
             'student' => new StudentResource($this->student),
             'is_bank_linked' => $activeLink !== null,
             'bank_link' => $activeLink !== null ? new BankLinkResource($activeLink) : null,
+            'spending_limit' => $limitSummary,
         ];
     }
 }

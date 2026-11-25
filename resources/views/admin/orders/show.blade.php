@@ -134,7 +134,7 @@
                         $toVal = $log->to_status instanceof \App\Enums\OrderStatus ? $log->to_status->value : (string) $log->to_status;
                     @endphp
                     <tr>
-                        <td>{{ $log->created_at?->format('H:i:s d/m/Y') }}</td>
+                        <td>{{ $log->created_at?->timezone('Asia/Ho_Chi_Minh')->format('H:i:s d/m/Y') }}</td>
                         <td><span class="badge badge-{{ $fromVal }}">{{ $fromVal }}</span></td>
                         <td><span class="badge badge-{{ $toVal }}">{{ $toVal }}</span></td>
                         <td>{{ $log->actor?->name ?? 'User #'.$log->changed_by }}</td>

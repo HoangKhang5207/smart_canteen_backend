@@ -585,6 +585,29 @@ class BankLinkingService
 
             $now = now();
 
+            /** @var OtpVerification|null $latestUnlinkOtp */
+            $latestUnlinkOtp = OtpVerification::query()
+                ->where('bank_link_id', $bankLink->id)
+                ->where('purpose', OtpPurpose::BANK_UNLINK->value)
+                ->whereNull('verified_at')
+                ->latest('id')
+                ->lockForUpdate()
+                ->first();
+
+            if ($latestUnlinkOtp !== null) {
+                $elapsed = $now->getTimestamp() - $latestUnlinkOtp->last_sent_at->getTimestamp();
+                if ($elapsed < $cooldownSeconds) {
+                    $retryAfter = max(1, $cooldownSeconds - $elapsed);
+
+                    throw new OtpVerificationException(
+                        sprintf('Vui lòng đợi %d giây trước khi yêu cầu mã OTP hủy liên kết mới.', $retryAfter),
+                        'OTP_RESEND_COOLDOWN',
+                        429,
+                        ['retry_after_seconds' => $retryAfter],
+                    );
+                }
+            }
+
             // Invalidate any previous unverified unlink OTPs for this bank link
             OtpVerification::query()
                 ->where('bank_link_id', $bankLink->id)

@@ -22,8 +22,9 @@ class StatisticsService
      */
     public function getTodaySummary(): array
     {
-        $startOfDay = now()->startOfDay();
-        $endOfDay = now()->endOfDay();
+        $nowVn = now(SpendingLimitService::TIMEZONE);
+        $startOfDay = $nowVn->copy()->startOfDay()->utc();
+        $endOfDay = $nowVn->copy()->endOfDay()->utc();
 
         $rawCounts = Order::query()
             ->whereBetween('created_at', [$startOfDay, $endOfDay])
@@ -47,7 +48,7 @@ class StatisticsService
             ->sum('total_amount');
 
         return [
-            'date' => now()->toDateString(),
+            'date' => $nowVn->toDateString(),
             'today_total_orders' => $todayTotalOrders,
             'today_completed_revenue' => $todayCompletedRevenue,
             'today_active_orders' => $todayActiveOrders,

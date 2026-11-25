@@ -113,6 +113,16 @@ class CanteenBankLinkController extends Controller
                 'message' => $e->getMessage(),
                 'error_code' => $e->errorCode,
             ], 409);
+        } catch (OtpVerificationException $e) {
+            $body = [
+                'message' => $e->getMessage(),
+                'error_code' => $e->errorCode,
+            ];
+            if ($e->meta !== []) {
+                $body['meta'] = $e->meta;
+            }
+
+            return response()->json($body, $e->statusCode);
         }
     }
 

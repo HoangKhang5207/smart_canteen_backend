@@ -290,4 +290,31 @@ class BankUnlinkOtpTest extends TestCase
             ->assertStatus(422)
             ->assertJsonValidationErrors(['store_name']);
     }
+
+    public function test_initiate_unlink_enforces_service_level_cooldown(): void
+    {
+        config()->set('services.banking.otp_resend_cooldown_seconds', 30);
+
+        $parent = User::factory()->create();
+        [, $bankLink] = $this->createLinkedCard($parent);
+        Sanctum::actingAs($parent);
+
+        Carbon::setTestNow(Carbon::parse('2026-11-25 11:00:00', 'Asia/Ho_Chi_Minh'));
+        try {
+            $this->postJson("/api/v1/canteen/bank-links/{$bankLink->id}/unlink/initiate")
+                ->assertCreated();
+
+            // Immediate re-initiation is blocked by service-level cooldown
+            $this->postJson("/api/v1/canteen/bank-links/{$bankLink->id}/unlink/initiate")
+                ->assertStatus(429)
+                ->assertJsonPath('error_code', 'OTP_RESEND_COOLDOWN');
+
+            // Allowed once cooldown elapses
+            Carbon::setTestNow(Carbon::parse('2026-11-25 11:00:35', 'Asia/Ho_Chi_Minh'));
+            $this->postJson("/api/v1/canteen/bank-links/{$bankLink->id}/unlink/initiate")
+                ->assertCreated();
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
 }

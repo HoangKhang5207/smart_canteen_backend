@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Exceptions\CardNotLinkedException;
 use App\Exceptions\IdempotencyConflictException;
 use App\Exceptions\InsufficientBankBalanceException;
+use App\Exceptions\InsufficientStockException;
 use App\Exceptions\PaymentGatewayException;
 use App\Exceptions\SpendingLimitExceededException;
 use App\Http\Controllers\Controller;
@@ -41,6 +42,12 @@ class CanteenPosPurchaseController extends Controller
                 'error_code' => $e->errorCode,
             ], 422);
         } catch (SpendingLimitExceededException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'error_code' => $e->errorCode,
+                'meta' => $e->meta,
+            ], 422);
+        } catch (InsufficientStockException $e) {
             return response()->json([
                 'message' => $e->getMessage(),
                 'error_code' => $e->errorCode,

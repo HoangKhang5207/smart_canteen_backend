@@ -242,6 +242,10 @@ class MenuSeeder extends Seeder
             );
 
             foreach ($products as $item) {
+                $defaultStock = ! $item['is_available']
+                    ? 0
+                    : ($item['slug'] === 'banh-flan-trung-sua-caramel' ? 4 : 30);
+
                 Product::updateOrCreate(
                     ['name' => $item['name']],
                     [
@@ -250,6 +254,8 @@ class MenuSeeder extends Seeder
                         'price' => $item['price'],
                         'image_url' => '/images/products/'.$item['slug'].'.jpg',
                         'is_available' => $item['is_available'],
+                        'stock_quantity' => $item['stock_quantity'] ?? $defaultStock,
+                        'low_stock_threshold' => 5,
                     ],
                 );
             }

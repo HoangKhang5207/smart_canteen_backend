@@ -55,13 +55,36 @@ class AuthController extends Controller
             $resolvedName = $clientName;
         }
 
-        $user = User::updateOrCreate(
-            ['zalo_user_id' => $resolvedZaloId],
-            [
-                'name' => $resolvedName,
-                'role' => UserRole::CUSTOMER,
-            ],
-        );
+        $resolveUser = function () use ($resolvedZaloId, $resolvedName): User {
+            return DB::transaction(function () use ($resolvedZaloId, $resolvedName): User {
+                /** @var User|null $existing */
+                $existing = User::query()
+                    ->where('zalo_user_id', $resolvedZaloId)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($existing !== null) {
+                    // Never overwrite existing user's role (preserves student/parent/staff/admin RBAC)
+                    if (in_array($existing->name, ['Khách Zalo', 'Phụ huynh Zalo', ''], true) && $resolvedName !== 'Khách Zalo') {
+                        $existing->update(['name' => $resolvedName]);
+                    }
+
+                    return $existing->fresh();
+                }
+
+                return User::create([
+                    'zalo_user_id' => $resolvedZaloId,
+                    'name' => $resolvedName,
+                    'role' => UserRole::CUSTOMER,
+                ]);
+            });
+        };
+
+        try {
+            $user = $resolveUser();
+        } catch (UniqueConstraintViolationException) {
+            $user = $resolveUser();
+        }
 
         $token = $user->createToken('miniapp')->plainTextToken;
 
@@ -90,14 +113,34 @@ class AuthController extends Controller
 
         $key = $validated['demo_key'] ?? 'customer1';
         $zaloId = "demo_{$key}";
+        $defaultName = $key === 'customer1' ? 'Khách hàng Demo' : "Khách Demo ({$key})";
 
-        $user = User::updateOrCreate(
-            ['zalo_user_id' => $zaloId],
-            [
-                'name' => $key === 'customer1' ? 'Khách hàng Demo' : "Khách Demo ({$key})",
-                'role' => UserRole::CUSTOMER,
-            ],
-        );
+        $resolveDemo = function () use ($zaloId, $defaultName): User {
+            return DB::transaction(function () use ($zaloId, $defaultName): User {
+                /** @var User|null $existing */
+                $existing = User::query()
+                    ->where('zalo_user_id', $zaloId)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($existing !== null) {
+                    // Preserve existing role (e.g., demo_student1 stays UserRole::STUDENT)
+                    return $existing;
+                }
+
+                return User::create([
+                    'zalo_user_id' => $zaloId,
+                    'name' => $defaultName,
+                    'role' => UserRole::CUSTOMER,
+                ]);
+            });
+        };
+
+        try {
+            $user = $resolveDemo();
+        } catch (UniqueConstraintViolationException) {
+            $user = $resolveDemo();
+        }
 
         $token = $user->createToken('miniapp-demo')->plainTextToken;
 

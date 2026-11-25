@@ -6,12 +6,14 @@ use App\Enums\PaymentMethod;
 use App\Exceptions\CardNotLinkedException;
 use App\Exceptions\IdempotencyConflictException;
 use App\Exceptions\InsufficientBankBalanceException;
+use App\Exceptions\InsufficientStockException;
 use App\Exceptions\PaymentGatewayException;
 use App\Exceptions\SpendingLimitExceededException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreOrderRequest;
 use App\Http\Resources\OrderResource;
 use App\Models\Order;
+use App\Models\StudentCard;
 use App\Services\OrderService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,10 +30,19 @@ class OrderController extends Controller
         ]);
 
         $perPage = isset($validated['per_page']) ? (int) $validated['per_page'] : 10;
+        $user = $request->user();
+        $accessibleCardIds = StudentCard::query()
+            ->whereHas('student', fn ($q) => $q->accessibleBy($user))
+            ->pluck('id');
 
         $orders = Order::query()
             ->with(['items.product', 'studentCard.student'])
-            ->where('user_id', $request->user()->id)
+            ->where(function ($query) use ($user, $accessibleCardIds): void {
+                $query->where('user_id', $user->id);
+                if ($accessibleCardIds->isNotEmpty()) {
+                    $query->orWhereIn('student_card_id', $accessibleCardIds);
+                }
+            })
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->paginate($perPage)
@@ -67,6 +78,12 @@ class OrderController extends Controller
                 'error_code' => $e->errorCode,
             ], 422);
         } catch (SpendingLimitExceededException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'error_code' => $e->errorCode,
+                'meta' => $e->meta,
+            ], 422);
+        } catch (InsufficientStockException $e) {
             return response()->json([
                 'message' => $e->getMessage(),
                 'error_code' => $e->errorCode,

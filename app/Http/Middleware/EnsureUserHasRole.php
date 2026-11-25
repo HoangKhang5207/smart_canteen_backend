@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Enums\UserRole;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -22,10 +23,21 @@ class EnsureUserHasRole
 
         $userRole = $user->role instanceof \BackedEnum ? $user->role->value : (string) $user->role;
 
-        if (! in_array($userRole, $roles, true)) {
+        $expandedRoles = $roles;
+        if (in_array(UserRole::PARENT->value, $roles, true) && ! in_array(UserRole::CUSTOMER->value, $expandedRoles, true)) {
+            $expandedRoles[] = UserRole::CUSTOMER->value;
+        }
+
+        if (! in_array($userRole, $expandedRoles, true)) {
             if ($request->expectsJson() || $request->is('api/*')) {
+                $isParentRequired = in_array(UserRole::PARENT->value, $roles, true)
+                    && $userRole === UserRole::STUDENT->value;
+
                 return response()->json([
-                    'message' => 'Bạn không có quyền truy cập tài nguyên này.',
+                    'message' => $isParentRequired
+                        ? 'Thao tác này chỉ dành cho tài khoản phụ huynh. Vui lòng liên hệ phụ huynh để thực hiện.'
+                        : 'Bạn không có quyền truy cập tài nguyên này.',
+                    'error_code' => $isParentRequired ? 'PARENT_ROLE_REQUIRED' : 'FORBIDDEN',
                 ], 403);
             }
 

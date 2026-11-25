@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     @hasSection('auto_refresh')
         <meta http-equiv="refresh" content="10">
     @endif
@@ -221,6 +222,12 @@
             color: var(--text-muted);
             font-weight: 600;
         }
+        @media print {
+            .topbar, .no-print { display: none !important; }
+            body { background: #FFFFFF; }
+            .container { max-width: 100%; margin: 0; padding: 0; }
+            .card { border: none; box-shadow: none; }
+        }
     </style>
 </head>
 <body>
@@ -234,11 +241,13 @@
             </div>
         </a>
         <nav class="nav-links" aria-label="Điều hướng quản trị">
-            <a href="{{ route('admin.dashboard') }}" class="nav-link {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}">Tổng quan hôm nay</a>
-            <a href="{{ route('admin.orders.index') }}" class="nav-link {{ request()->routeIs('admin.orders.*') ? 'active' : '' }}">Điều phối đơn hàng</a>
-            <a href="{{ route('admin.canteen.cards.index') }}" class="nav-link {{ request()->routeIs('admin.canteen.cards.*') ? 'active' : '' }}">Căn tin số</a>
-            <a href="{{ route('admin.canteen.reconciliation.index') }}" class="nav-link {{ request()->routeIs('admin.canteen.reconciliation.*') ? 'active' : '' }}">Đối soát & GD</a>
-            <a href="{{ route('admin.products.index') }}" class="nav-link {{ request()->routeIs('admin.products.*') ? 'active' : '' }}">Món ăn</a>
+            <a href="{{ route('admin.dashboard') }}" class="nav-link {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}">Tổng quan</a>
+            <a href="{{ route('admin.pos.index') }}" class="nav-link {{ request()->routeIs('admin.pos.*') ? 'active' : '' }}">POS Quầy</a>
+            <a href="{{ route('admin.orders.index') }}" class="nav-link {{ request()->routeIs('admin.orders.*') ? 'active' : '' }}">Đơn hàng</a>
+            <a href="{{ route('admin.canteen.students.index') }}" class="nav-link {{ request()->routeIs('admin.canteen.students.*') ? 'active' : '' }}">Học sinh</a>
+            <a href="{{ route('admin.canteen.cards.index') }}" class="nav-link {{ request()->routeIs('admin.canteen.cards.*') ? 'active' : '' }}">Thẻ Căn tin</a>
+            <a href="{{ route('admin.canteen.reconciliation.index') }}" class="nav-link {{ request()->routeIs('admin.canteen.reconciliation.*') ? 'active' : '' }}">Đối soát</a>
+            <a href="{{ route('admin.products.index') }}" class="nav-link {{ request()->routeIs('admin.products.*') ? 'active' : '' }}">Món ăn &amp; Kho</a>
             <a href="{{ route('admin.categories.index') }}" class="nav-link {{ request()->routeIs('admin.categories.*') ? 'active' : '' }}">Danh mục</a>
         </nav>
         <div class="inline-actions">

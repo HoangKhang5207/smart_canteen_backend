@@ -32,9 +32,19 @@
                 <input id="name" type="text" name="name" value="{{ old('name', $product->name) }}" required maxlength="150">
             </div>
 
-            <div style="margin-bottom: 1rem;">
-                <label for="price" style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.3rem;">Giá bán (số nguyên VND)</label>
-                <input id="price" type="number" name="price" value="{{ old('price', $product->price) }}" required min="1000" step="500">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.85rem; margin-bottom: 1rem;">
+                <div>
+                    <label for="price" style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.3rem;">Giá bán (VND)</label>
+                    <input id="price" type="number" name="price" value="{{ old('price', $product->price) }}" required min="1000" step="500">
+                </div>
+                <div>
+                    <label for="stock_quantity" style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.3rem;">Tồn kho (để trống = không giới hạn)</label>
+                    <input id="stock_quantity" type="number" name="stock_quantity" value="{{ old('stock_quantity', $product->stock_quantity) }}" min="0" max="100000" placeholder="Không giới hạn">
+                </div>
+                <div>
+                    <label for="low_stock_threshold" style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.3rem;">Ngưỡng cảnh báo sắp hết</label>
+                    <input id="low_stock_threshold" type="number" name="low_stock_threshold" value="{{ old('low_stock_threshold', $product->low_stock_threshold ?? 5) }}" min="0" max="1000">
+                </div>
             </div>
 
             <div style="margin-bottom: 1rem;">
@@ -45,9 +55,6 @@
             <div style="margin-bottom: 1rem;">
                 <label for="image_url" style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.3rem;">Đường dẫn hoặc URL hình ảnh (tùy chọn)</label>
                 <input id="image_url" type="text" name="image_url" value="{{ old('image_url', $product->image_url) }}" maxlength="500" placeholder="/images/products/com-suon-nuong-mat-ong.jpg hoặc https://...">
-                <p style="font-size: 0.78rem; color: var(--text-muted); margin: 0.35rem 0 0;">
-                    Đặt ảnh tải về vào thư mục <code>miniapp/public/images/products/&lt;ten-file&gt;.jpg</code> (và <code>api/public/images/products/</code>) rồi nhập <code>/images/products/&lt;ten-file&gt;.jpg</code>, hoặc dán trực tiếp URL <code>https://...</code>.
-                </p>
             </div>
 
             <div style="margin-bottom: 1.25rem;">

@@ -10,10 +10,33 @@ class OrderPolicy
 {
     public function view(User $user, Order $order): bool
     {
-        if (in_array($user->role, [UserRole::STAFF, UserRole::ADMIN], true)) {
+        $role = $user->role instanceof UserRole
+            ? $user->role
+            : (UserRole::tryFrom((string) $user->role) ?? UserRole::CUSTOMER);
+
+        if ($role->isStaffOrAdmin()) {
             return true;
         }
 
-        return $order->user_id === $user->id;
+        if ($order->user_id === $user->id) {
+            return true;
+        }
+
+        if ($order->student_card_id !== null) {
+            $student = $order->relationLoaded('studentCard')
+                ? $order->studentCard?->student
+                : $order->studentCard()->with('student')->first()?->student;
+
+            if ($student !== null && $student->is_active) {
+                if ($role === UserRole::STUDENT && (int) $student->student_user_id === (int) $user->id) {
+                    return true;
+                }
+                if ($role->isParentEquivalent() && (int) $student->user_id === (int) $user->id) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 }

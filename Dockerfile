@@ -86,7 +86,9 @@ ENV OPCACHE_VALIDATE_TIMESTAMPS=1
 
 COPY --from=composer:2.8 /usr/bin/composer /usr/bin/composer
 RUN apk add --no-cache git unzip \
-    && git config --system --add safe.directory /var/www/html
+    && git config --system --add safe.directory /var/www/html \
+    && mkdir -p /var/www/html/vendor \
+    && chown -R appuser:appuser /var/www/html/vendor
 
 USER appuser
 EXPOSE 9000

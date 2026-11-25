@@ -3,6 +3,9 @@
 use App\Http\Controllers\Api\V1\Admin\OrderController as AdminOrderController;
 use App\Http\Controllers\Api\V1\Admin\StatisticsController as AdminStatisticsController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\CanteenBankController;
+use App\Http\Controllers\Api\V1\CanteenBankLinkController;
+use App\Http\Controllers\Api\V1\CanteenCardController;
 use App\Http\Controllers\Api\V1\CategoryController;
 use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\ProductController;
@@ -20,6 +23,7 @@ Route::prefix('v1')->group(function () {
     Route::get('/categories', [CategoryController::class, 'index']);
     Route::get('/products', [ProductController::class, 'index']);
     Route::get('/products/{id}', [ProductController::class, 'show'])->whereNumber('id');
+    Route::get('/canteen/banks', [CanteenBankController::class, 'index']);
 
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/auth/me', [AuthController::class, 'me']);
@@ -27,6 +31,14 @@ Route::prefix('v1')->group(function () {
         Route::get('/orders', [OrderController::class, 'index']);
         Route::post('/orders', [OrderController::class, 'store']);
         Route::get('/orders/{id}', [OrderController::class, 'show'])->whereNumber('id');
+
+        Route::prefix('canteen')->group(function () {
+            Route::get('/cards', [CanteenCardController::class, 'index']);
+            Route::get('/cards/{cardId}', [CanteenCardController::class, 'show'])->whereNumber('cardId');
+            Route::post('/cards/{cardId}/bank-links', [CanteenBankLinkController::class, 'store'])->whereNumber('cardId');
+            Route::post('/bank-links/{bankLinkId}/verify-otp', [CanteenBankLinkController::class, 'verifyOtp'])->whereNumber('bankLinkId');
+            Route::post('/bank-links/{bankLinkId}/resend-otp', [CanteenBankLinkController::class, 'resendOtp'])->whereNumber('bankLinkId');
+        });
 
         Route::prefix('admin')->middleware('role:staff,admin')->group(function () {
             Route::get('/orders', [AdminOrderController::class, 'index']);

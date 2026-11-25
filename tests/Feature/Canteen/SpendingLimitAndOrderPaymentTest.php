@@ -15,6 +15,7 @@ use App\Models\Student;
 use App\Models\StudentCard;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -334,5 +335,160 @@ class SpendingLimitAndOrderPaymentTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.spending_limit.spent_today', 0)
             ->assertJsonPath('data.spending_limit.remaining_limit', 50000);
+    }
+
+    public function test_cancelling_previous_day_card_order_marks_refunded_without_altering_todays_spent(): void
+    {
+        [$user, , $card] = $this->createCustomerCard(linked: true);
+        $staff = User::factory()->create(['role' => UserRole::STAFF]);
+        $product = $this->createProduct('Phở bò', 40000);
+
+        Sanctum::actingAs($user);
+        $this->putJson("/api/v1/canteen/cards/{$card->id}/spending-limit", ['daily_limit' => 50000])->assertOk();
+
+        $yesterdayOrder = $this->withHeaders(['Idempotency-Key' => 'prev-day-order'])
+            ->postJson('/api/v1/orders', [
+                'items' => [['product_id' => $product->id, 'quantity' => 1]],
+                'student_card_id' => $card->id,
+                'payment_method' => PaymentMethod::STUDENT_CARD->value,
+            ])
+            ->assertCreated();
+
+        // Advance to next Vietnam day and place a fresh order of 10,000
+        $this->travel(1)->days();
+        $snack = $this->createProduct('Nước suối', 10000);
+        $this->withHeaders(['Idempotency-Key' => 'today-order'])
+            ->postJson('/api/v1/orders', [
+                'items' => [['product_id' => $snack->id, 'quantity' => 1]],
+                'student_card_id' => $card->id,
+                'payment_method' => PaymentMethod::STUDENT_CARD->value,
+            ])
+            ->assertCreated();
+
+        // Cancel yesterday's order: payment_status becomes REFUNDED, today's spent stays 10,000 (not 0 or negative)
+        Sanctum::actingAs($staff);
+        $this->patchJson("/api/v1/admin/orders/{$yesterdayOrder->json('data.id')}/status", [
+            'status' => 'CANCELLED',
+            'version' => 1,
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.payment_status', 'REFUNDED');
+
+        Sanctum::actingAs($user);
+        $this->getJson("/api/v1/canteen/cards/{$card->id}")
+            ->assertOk()
+            ->assertJsonPath('data.spending_limit.spent_today', 10000)
+            ->assertJsonPath('data.spending_limit.remaining_limit', 40000);
+    }
+
+    public function test_lowering_daily_limit_below_spent_today_clamps_remaining_to_zero_and_blocks_purchases(): void
+    {
+        [$user, , $card] = $this->createCustomerCard(linked: true);
+        $product = $this->createProduct('Cơm gà', 40000);
+        $snack = $this->createProduct('Sữa chua', 10000);
+
+        Sanctum::actingAs($user);
+        $this->putJson("/api/v1/canteen/cards/{$card->id}/spending-limit", ['daily_limit' => 100000])->assertOk();
+
+        $this->withHeaders(['Idempotency-Key' => 'spend-40k'])
+            ->postJson('/api/v1/orders', [
+                'items' => [['product_id' => $product->id, 'quantity' => 1]],
+                'student_card_id' => $card->id,
+                'payment_method' => PaymentMethod::STUDENT_CARD->value,
+            ])
+            ->assertCreated();
+
+        // Lower daily_limit to 20,000 (< spent_today 40,000) -> remaining clamped to 0, never negative
+        $this->putJson("/api/v1/canteen/cards/{$card->id}/spending-limit", ['daily_limit' => 20000])
+            ->assertOk()
+            ->assertJsonPath('data.spending_limit.daily_limit', 20000)
+            ->assertJsonPath('data.spending_limit.spent_today', 40000)
+            ->assertJsonPath('data.spending_limit.remaining_limit', 0);
+
+        $this->withHeaders(['Idempotency-Key' => 'blocked-after-lower'])
+            ->postJson('/api/v1/orders', [
+                'items' => [['product_id' => $snack->id, 'quantity' => 1]],
+                'student_card_id' => $card->id,
+                'payment_method' => PaymentMethod::STUDENT_CARD->value,
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('error_code', 'SPENDING_LIMIT_EXCEEDED')
+            ->assertJsonPath('meta.remaining_limit', 0);
+    }
+
+    public function test_resets_stale_spent_today_across_exact_vietnam_midnight_boundary_and_on_limit_update(): void
+    {
+        [$user, , $card] = $this->createCustomerCard(linked: true);
+        $product = $this->createProduct('Trà tắc', 20000);
+
+        Sanctum::actingAs($user);
+
+        // 2026-11-25 16:59:59 UTC == 2026-11-25 23:59:59 Asia/Ho_Chi_Minh
+        $this->travelTo(Carbon::parse('2026-11-25 16:59:59', 'UTC'));
+
+        $this->putJson("/api/v1/canteen/cards/{$card->id}/spending-limit", ['daily_limit' => 50000])->assertOk();
+        $this->withHeaders(['Idempotency-Key' => 'before-vn-midnight'])
+            ->postJson('/api/v1/orders', [
+                'items' => [['product_id' => $product->id, 'quantity' => 1]],
+                'student_card_id' => $card->id,
+                'payment_method' => PaymentMethod::STUDENT_CARD->value,
+            ])
+            ->assertCreated();
+
+        // 2 seconds later: 2026-11-25 17:00:01 UTC == 2026-11-26 00:00:01 Asia/Ho_Chi_Minh (new Vietnam day!)
+        $this->travelTo(Carbon::parse('2026-11-25 17:00:01', 'UTC'));
+
+        $this->putJson("/api/v1/canteen/cards/{$card->id}/spending-limit", ['daily_limit' => 60000])
+            ->assertOk()
+            ->assertJsonPath('data.spending_limit.effective_date', '2026-11-26')
+            ->assertJsonPath('data.spending_limit.spent_today', 0)
+            ->assertJsonPath('data.spending_limit.remaining_limit', 60000);
+    }
+
+    public function test_enforces_pos_limit_exceeded_and_idempotency_payload_mismatch_across_payment_methods(): void
+    {
+        [$user, , $card] = $this->createCustomerCard(linked: true);
+        $product = $this->createProduct('Bánh mì chảo', 30000);
+
+        Sanctum::actingAs($user);
+        $this->putJson("/api/v1/canteen/cards/{$card->id}/spending-limit", ['daily_limit' => 20000])->assertOk();
+
+        // POS exceeds daily limit -> 422 SPENDING_LIMIT_EXCEEDED
+        $this->withHeaders(['Idempotency-Key' => 'pos-over-limit'])
+            ->postJson("/api/v1/canteen/cards/{$card->id}/pos-purchases", [
+                'items' => [['product_id' => $product->id, 'quantity' => 1]],
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('error_code', 'SPENDING_LIMIT_EXCEEDED');
+
+        // Raise limit and create POS order, then reuse same Idempotency-Key with different quantity -> 409
+        $this->putJson("/api/v1/canteen/cards/{$card->id}/spending-limit", ['daily_limit' => 100000])->assertOk();
+        $this->withHeaders(['Idempotency-Key' => 'pos-idem-mismatch'])
+            ->postJson("/api/v1/canteen/cards/{$card->id}/pos-purchases", [
+                'items' => [['product_id' => $product->id, 'quantity' => 1]],
+            ])
+            ->assertCreated();
+
+        $this->withHeaders(['Idempotency-Key' => 'pos-idem-mismatch'])
+            ->postJson("/api/v1/canteen/cards/{$card->id}/pos-purchases", [
+                'items' => [['product_id' => $product->id, 'quantity' => 2]],
+            ])
+            ->assertStatus(409);
+
+        // Reusing Idempotency-Key on /orders with different payment method (COUNTER_CASH vs STUDENT_CARD) -> 409
+        $this->withHeaders(['Idempotency-Key' => 'method-switch-key'])
+            ->postJson('/api/v1/orders', [
+                'items' => [['product_id' => $product->id, 'quantity' => 1]],
+                'payment_method' => PaymentMethod::COUNTER_CASH->value,
+            ])
+            ->assertCreated();
+
+        $this->withHeaders(['Idempotency-Key' => 'method-switch-key'])
+            ->postJson('/api/v1/orders', [
+                'items' => [['product_id' => $product->id, 'quantity' => 1]],
+                'student_card_id' => $card->id,
+                'payment_method' => PaymentMethod::STUDENT_CARD->value,
+            ])
+            ->assertStatus(409);
     }
 }

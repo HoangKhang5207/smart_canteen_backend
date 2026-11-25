@@ -226,7 +226,7 @@ class SpendingLimitService
         ];
     }
 
-    public function refundForCancelledOrder(Order $lockedOrder): void
+    public function refundForCancelledOrder(Order $lockedOrder, ?SpendingLimit $lockedLimit = null): void
     {
         if ($lockedOrder->student_card_id === null || $lockedOrder->payment_status !== PaymentStatus::PAID) {
             return;
@@ -252,7 +252,7 @@ class SpendingLimitService
         }
 
         /** @var SpendingLimit|null $limit */
-        $limit = SpendingLimit::query()
+        $limit = $lockedLimit ?? SpendingLimit::query()
             ->where('student_card_id', $lockedOrder->student_card_id)
             ->lockForUpdate()
             ->first();

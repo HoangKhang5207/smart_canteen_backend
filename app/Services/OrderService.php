@@ -11,6 +11,7 @@ use App\Exceptions\OrderVersionConflictException;
 use App\Models\Order;
 use App\Models\OrderStatusLog;
 use App\Models\Product;
+use App\Models\SpendingLimit;
 use App\Models\StudentCard;
 use App\Models\User;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -273,7 +274,21 @@ class OrderService
         int $expectedVersion,
         User $actor,
     ): Order {
-        return DB::transaction(function () use ($order, $nextStatus, $expectedVersion, $actor): Order {
+        $studentCardId = $nextStatus === OrderStatus::CANCELLED
+            ? Order::query()->whereKey($order->id)->value('student_card_id')
+            : null;
+
+        return DB::transaction(function () use ($order, $nextStatus, $expectedVersion, $actor, $studentCardId): Order {
+            // Preserve canonical lock order: student_cards -> spending_limits -> orders
+            $lockedLimit = null;
+            if ($studentCardId !== null) {
+                StudentCard::query()->whereKey($studentCardId)->lockForUpdate()->first();
+                $lockedLimit = SpendingLimit::query()
+                    ->where('student_card_id', $studentCardId)
+                    ->lockForUpdate()
+                    ->first();
+            }
+
             /** @var Order $lockedOrder */
             $lockedOrder = Order::query()
                 ->whereKey($order->id)
@@ -302,7 +317,7 @@ class OrderService
             ]);
 
             if ($nextStatus === OrderStatus::CANCELLED) {
-                $this->spendingLimitService->refundForCancelledOrder($lockedOrder);
+                $this->spendingLimitService->refundForCancelledOrder($lockedOrder, $lockedLimit);
             }
 
             OrderStatusLog::create([

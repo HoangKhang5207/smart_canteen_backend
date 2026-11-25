@@ -109,4 +109,20 @@ class MockEpayBankingGateway implements BankingGatewayInterface
             'provider_reference' => $providerReference,
         ];
     }
+
+    public function chargeAutoDebit(string $providerReference, int $amountVnd, string $orderCode): array
+    {
+        return [
+            'charged' => true,
+            'charge_reference' => 'EPAY-CHG-'.Str::upper(Str::random(10)),
+        ];
+    }
+
+    public function refundAutoDebit(string $chargeReference, int $amountVnd, string $orderCode): array
+    {
+        return [
+            'refunded' => true,
+            'refund_reference' => 'EPAY-REF-'.Str::upper(Str::random(10)),
+        ];
+    }
 }

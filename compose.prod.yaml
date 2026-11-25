@@ -11,6 +11,8 @@ services:
       APP_ENV: production
       APP_DEBUG: "false"
       DEMO_LOGIN_ENABLED: "false"
+      BANKING_EXPOSE_DEBUG_OTP: "false"
+      BANKING_AUTO_PROVISION_DEMO_CARD: "false"
       OPCACHE_VALIDATE_TIMESTAMPS: "0"
     volumes: !reset []
 

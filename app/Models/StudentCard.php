@@ -41,4 +41,19 @@ class StudentCard extends Model
         return $this->hasOne(BankLink::class)
             ->where('status', BankLinkStatus::ACTIVE->value);
     }
+
+    public function spendingLimit(): HasOne
+    {
+        return $this->hasOne(SpendingLimit::class);
+    }
+
+    public function spendingLimitLogs(): HasMany
+    {
+        return $this->hasMany(SpendingLimitLog::class);
+    }
+
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class);
+    }
 }

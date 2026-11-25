@@ -7,6 +7,7 @@ use App\Models\Student;
 use App\Models\StudentCard;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class StudentCardService
@@ -16,20 +17,22 @@ class StudentCardService
      */
     public function listForUser(User $user): Collection
     {
-        $cards = StudentCard::query()
-            ->with(['student', 'activeBankLink'])
-            ->whereHas('student', fn ($q) => $q->where('user_id', $user->id)->where('is_active', true))
-            ->orderBy('id')
-            ->get();
+        $cards = $this->queryUserCards($user);
 
         if ($cards->isEmpty() && $this->shouldAutoProvisionDemoCard()) {
-            $this->provisionDemoCard($user);
+            DB::transaction(function () use ($user): void {
+                User::query()->whereKey($user->id)->lockForUpdate()->first();
 
-            return StudentCard::query()
-                ->with(['student', 'activeBankLink'])
-                ->whereHas('student', fn ($q) => $q->where('user_id', $user->id)->where('is_active', true))
-                ->orderBy('id')
-                ->get();
+                $alreadyHasCard = StudentCard::query()
+                    ->whereHas('student', fn ($q) => $q->where('user_id', $user->id)->where('is_active', true))
+                    ->exists();
+
+                if (! $alreadyHasCard) {
+                    $this->provisionDemoCard($user);
+                }
+            });
+
+            return $this->queryUserCards($user);
         }
 
         return $cards;
@@ -38,10 +41,22 @@ class StudentCardService
     public function findForUserOrFail(User $user, int $cardId): StudentCard
     {
         return StudentCard::query()
-            ->with(['student', 'activeBankLink'])
+            ->with(['student', 'activeBankLink', 'spendingLimit'])
             ->whereKey($cardId)
             ->whereHas('student', fn ($q) => $q->where('user_id', $user->id)->where('is_active', true))
             ->firstOrFail();
+    }
+
+    /**
+     * @return Collection<int, StudentCard>
+     */
+    private function queryUserCards(User $user): Collection
+    {
+        return StudentCard::query()
+            ->with(['student', 'activeBankLink', 'spendingLimit'])
+            ->whereHas('student', fn ($q) => $q->where('user_id', $user->id)->where('is_active', true))
+            ->orderBy('id')
+            ->get();
     }
 
     private function shouldAutoProvisionDemoCard(): bool

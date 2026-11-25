@@ -400,6 +400,24 @@ class DigitalCanteenBankLinkTest extends TestCase
         $this->assertArrayNotHasKey('debug_otp', $response->json('data.otp'));
     }
 
+    public function test_hides_debug_otp_in_production_even_when_flag_is_true(): void
+    {
+        config()->set('services.banking.expose_debug_otp', true);
+        $this->app->detectEnvironment(fn () => 'production');
+
+        try {
+            [$user, , $card] = $this->createCustomerWithCard('SEC002');
+            Sanctum::actingAs($user);
+
+            $response = $this->postJson("/api/v1/canteen/cards/{$card->id}/bank-links", $this->validBankPayload())
+                ->assertCreated();
+
+            $this->assertArrayNotHasKey('debug_otp', $response->json('data.otp'));
+        } finally {
+            $this->app->detectEnvironment(fn () => 'testing');
+        }
+    }
+
     public function test_student_card_seeder_is_idempotent_and_seeds_default_card(): void
     {
         $this->seed(StudentCardSeeder::class);

@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Enums\OrderStatus;
+use App\Enums\PaymentMethod;
+use App\Enums\PaymentStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,9 +16,16 @@ class Order extends Model
 
     protected $fillable = [
         'user_id',
+        'student_card_id',
         'code',
         'status',
+        'payment_method',
+        'payment_status',
+        'store_name',
         'total_amount',
+        'discount_amount',
+        'remaining_limit_snapshot',
+        'payment_reference',
         'note',
         'idempotency_key',
         'payload_hash',
@@ -27,7 +36,11 @@ class Order extends Model
     {
         return [
             'status' => OrderStatus::class,
+            'payment_method' => PaymentMethod::class,
+            'payment_status' => PaymentStatus::class,
             'total_amount' => 'integer',
+            'discount_amount' => 'integer',
+            'remaining_limit_snapshot' => 'integer',
             'version' => 'integer',
         ];
     }
@@ -35,6 +48,11 @@ class Order extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function studentCard(): BelongsTo
+    {
+        return $this->belongsTo(StudentCard::class);
     }
 
     public function items(): HasMany

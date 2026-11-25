@@ -128,6 +128,84 @@ class SpendingLimitService
         });
     }
 
+    public function updateDailyLimitByAdmin(
+        User $admin,
+        int $cardId,
+        int $newDailyLimit,
+        ?string $reason = null,
+    ): StudentCard {
+        $normalizedReason = $reason !== null && trim($reason) !== ''
+            ? trim($reason)
+            : 'Quản trị viên điều chỉnh hạn mức';
+        $today = $this->todayDate();
+
+        return DB::transaction(function () use ($admin, $cardId, $newDailyLimit, $normalizedReason, $today): StudentCard {
+            /** @var StudentCard|null $card */
+            $card = StudentCard::query()
+                ->whereKey($cardId)
+                ->lockForUpdate()
+                ->first();
+
+            if ($card === null) {
+                throw (new ModelNotFoundException)->setModel(StudentCard::class, [$cardId]);
+            }
+
+            if ($card->status !== StudentCardStatus::ACTIVE) {
+                throw ValidationException::withMessages([
+                    'card' => ['Chỉ có thể cập nhật hạn mức cho thẻ đang ở trạng thái hoạt động (ACTIVE).'],
+                ]);
+            }
+
+            $hasActiveLink = BankLink::query()
+                ->where('student_card_id', $card->id)
+                ->where('status', BankLinkStatus::ACTIVE->value)
+                ->exists();
+
+            if (! $hasActiveLink) {
+                throw new CardNotLinkedException(
+                    'Thẻ học sinh chưa liên kết tài khoản ngân hàng nên không thể thiết lập hạn mức.',
+                );
+            }
+
+            /** @var SpendingLimit|null $limit */
+            $limit = SpendingLimit::query()
+                ->where('student_card_id', $card->id)
+                ->lockForUpdate()
+                ->first();
+
+            if ($limit === null) {
+                $limit = SpendingLimit::create([
+                    'student_card_id' => $card->id,
+                    'daily_limit' => 0,
+                    'spent_today' => 0,
+                    'spent_date' => $today,
+                ]);
+            }
+
+            $previousLimit = (int) $limit->daily_limit;
+            $effectiveSpent = (string) $limit->spent_date === $today ? (int) $limit->spent_today : 0;
+
+            $limit->update([
+                'daily_limit' => $newDailyLimit,
+                'spent_today' => $effectiveSpent,
+                'spent_date' => $today,
+            ]);
+
+            if ($previousLimit !== $newDailyLimit) {
+                SpendingLimitLog::create([
+                    'student_card_id' => $card->id,
+                    'changed_by' => $admin->id,
+                    'previous_limit' => $previousLimit,
+                    'new_limit' => $newDailyLimit,
+                    'reason' => $normalizedReason,
+                    'created_at' => now(),
+                ]);
+            }
+
+            return $card->load(['student', 'activeBankLink', 'spendingLimit']);
+        });
+    }
+
     /**
      * Lock spending_limits right after student_cards (canonical order: student_cards -> spending_limits -> products -> orders).
      *

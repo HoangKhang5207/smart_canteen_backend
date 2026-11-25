@@ -36,6 +36,30 @@
     </div>
 </section>
 
+<section class="card" aria-label="Tóm tắt phân hệ Căn tin số">
+    <div class="flex-between" style="margin-bottom: 0.85rem;">
+        <div>
+            <h2 style="font-size: 1.05rem; margin: 0;">Căn tin số — Thanh toán thẻ học sinh hôm nay</h2>
+            <p style="font-size: 0.82rem; color: var(--text-muted); margin: 0.15rem 0 0;">Theo dõi nhanh thẻ đã liên kết ngân hàng và chi tiêu thẻ trong ngày (giờ VN)</p>
+        </div>
+        <a href="{{ route('admin.canteen.cards.index') }}" class="btn btn-secondary">Quản lý Thẻ & Hạn mức</a>
+    </div>
+    <div class="grid-stats" style="margin-bottom: 0;">
+        <div class="stat-card" style="background: var(--bg-page);">
+            <div class="stat-label">Thẻ hoạt động / Đã liên kết</div>
+            <div class="stat-value" style="font-size: 1.3rem;">{{ $canteenSummary['active_cards_count'] }} / <span style="color: var(--brand-700);">{{ $canteenSummary['linked_cards_count'] }}</span></div>
+        </div>
+        <div class="stat-card" style="background: var(--bg-page);">
+            <div class="stat-label">Giao dịch thẻ hôm nay</div>
+            <div class="stat-value" style="font-size: 1.3rem;">{{ $canteenSummary['today_card_orders_count'] }}</div>
+        </div>
+        <div class="stat-card" style="background: var(--bg-page);">
+            <div class="stat-label">Chi tiêu thẻ đã thanh toán hôm nay</div>
+            <div class="stat-value brand" style="font-size: 1.3rem;">{{ number_format($canteenSummary['today_card_spent_amount'], 0, ',', '.') }} ₫</div>
+        </div>
+    </div>
+</section>
+
 <section class="card" aria-label="Đơn hàng cần xử lý ngay">
     <div class="flex-between" style="margin-bottom: 1rem;">
         <h2 style="font-size: 1.1rem; margin: 0;">Đơn hàng đang chờ xử lý ({{ $activeOrders->count() }})</h2>

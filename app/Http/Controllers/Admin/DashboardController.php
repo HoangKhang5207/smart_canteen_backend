@@ -17,9 +17,10 @@ class DashboardController extends Controller
     public function index(): View
     {
         $summary = $this->statisticsService->getTodaySummary();
+        $canteenSummary = $this->statisticsService->getDigitalCanteenSummary();
 
         $activeOrders = Order::query()
-            ->with(['user', 'items.product'])
+            ->with(['user', 'items.product', 'studentCard.student'])
             ->whereIn('status', [
                 OrderStatus::PENDING->value,
                 OrderStatus::PREPARING->value,
@@ -32,6 +33,7 @@ class DashboardController extends Controller
 
         return view('admin.dashboard', [
             'summary' => $summary,
+            'canteenSummary' => $canteenSummary,
             'activeOrders' => $activeOrders,
         ]);
     }

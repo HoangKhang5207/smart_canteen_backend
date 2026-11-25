@@ -27,7 +27,7 @@ class OrderManagementController extends Controller
         $perPage = $requestedPerPage >= 1 && $requestedPerPage <= 100 ? $requestedPerPage : 10;
 
         $query = Order::query()
-            ->with(['user', 'items.product'])
+            ->with(['user', 'items.product', 'studentCard.student'])
             ->orderByDesc('created_at')
             ->orderByDesc('id');
 
@@ -52,7 +52,7 @@ class OrderManagementController extends Controller
 
     public function show(Order $order): View
     {
-        $order->load(['user', 'items.product', 'statusLogs.actor']);
+        $order->load(['user', 'items.product', 'statusLogs.actor', 'studentCard.student']);
 
         return view('admin.orders.show', [
             'order' => $order,

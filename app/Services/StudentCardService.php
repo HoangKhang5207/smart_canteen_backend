@@ -2,16 +2,25 @@
 
 namespace App\Services;
 
+use App\Contracts\BankingGatewayInterface;
+use App\Enums\BankLinkStatus;
 use App\Enums\StudentCardStatus;
+use App\Models\BankLink;
+use App\Models\OtpVerification;
 use App\Models\Student;
 use App\Models\StudentCard;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class StudentCardService
 {
+    public function __construct(
+        private readonly BankingGatewayInterface $gateway,
+    ) {}
+
     /**
      * @return Collection<int, StudentCard>
      */
@@ -84,5 +93,64 @@ class StudentCardService
             'status' => StudentCardStatus::ACTIVE,
             'issued_at' => now(),
         ]);
+    }
+
+    public function updateCardStatusByAdmin(StudentCard $card, StudentCardStatus $nextStatus): StudentCard
+    {
+        return DB::transaction(function () use ($card, $nextStatus): StudentCard {
+            // Canonical lock order: student_cards -> bank_links -> otp_verifications
+            /** @var StudentCard $lockedCard */
+            $lockedCard = StudentCard::query()
+                ->whereKey($card->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($lockedCard->status === StudentCardStatus::REVOKED && $nextStatus !== StudentCardStatus::REVOKED) {
+                throw ValidationException::withMessages([
+                    'status' => ['Thẻ đã thu hồi (REVOKED) không thể kích hoạt lại.'],
+                ]);
+            }
+
+            if ($lockedCard->status === $nextStatus) {
+                return $lockedCard->load(['student', 'activeBankLink', 'spendingLimit']);
+            }
+
+            if ($nextStatus === StudentCardStatus::REVOKED) {
+                $now = now();
+
+                /** @var Collection<int, BankLink> $openLinks */
+                $openLinks = BankLink::query()
+                    ->where('student_card_id', $lockedCard->id)
+                    ->whereIn('status', [BankLinkStatus::ACTIVE->value, BankLinkStatus::PENDING_OTP->value])
+                    ->lockForUpdate()
+                    ->get();
+
+                $linkIds = $openLinks->pluck('id');
+
+                foreach ($openLinks as $link) {
+                    if ($link->status === BankLinkStatus::ACTIVE) {
+                        $this->gateway->unlinkAutoDebit((string) $link->provider_reference);
+                        $link->update([
+                            'status' => BankLinkStatus::UNLINKED,
+                            'unlinked_at' => $now,
+                        ]);
+                    } else {
+                        $link->update(['status' => BankLinkStatus::EXPIRED]);
+                    }
+                }
+
+                if ($linkIds->isNotEmpty()) {
+                    OtpVerification::query()
+                        ->whereIn('bank_link_id', $linkIds)
+                        ->whereNull('verified_at')
+                        ->whereNull('invalidated_at')
+                        ->update(['invalidated_at' => $now]);
+                }
+            }
+
+            $lockedCard->update(['status' => $nextStatus]);
+
+            return $lockedCard->load(['student', 'activeBankLink', 'spendingLimit']);
+        });
     }
 }

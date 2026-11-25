@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AuthController;
+use App\Http\Controllers\Admin\CanteenCardManagementController;
 use App\Http\Controllers\Admin\CategoryManagementController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\OrderManagementController;
@@ -26,7 +27,18 @@ Route::prefix('admin')->group(function () {
         Route::get('/categories', [CategoryManagementController::class, 'index'])->name('admin.categories.index');
         Route::get('/products', [ProductManagementController::class, 'index'])->name('admin.products.index');
 
+        Route::get('/canteen/cards', [CanteenCardManagementController::class, 'index'])->name('admin.canteen.cards.index');
+        Route::get('/canteen/cards/{studentCard}', [CanteenCardManagementController::class, 'show'])
+            ->whereNumber('studentCard')
+            ->name('admin.canteen.cards.show');
+
         Route::middleware('role:admin')->group(function () {
+            Route::patch('/canteen/cards/{studentCard}/status', [CanteenCardManagementController::class, 'updateStatus'])
+                ->whereNumber('studentCard')
+                ->name('admin.canteen.cards.status');
+            Route::put('/canteen/cards/{studentCard}/spending-limit', [CanteenCardManagementController::class, 'updateSpendingLimit'])
+                ->whereNumber('studentCard')
+                ->name('admin.canteen.cards.limit');
             Route::post('/categories', [CategoryManagementController::class, 'store'])->name('admin.categories.store');
             Route::put('/categories/{category}', [CategoryManagementController::class, 'update'])->name('admin.categories.update');
             Route::delete('/categories/{category}', [CategoryManagementController::class, 'destroy'])->name('admin.categories.destroy');

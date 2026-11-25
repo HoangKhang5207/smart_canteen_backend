@@ -6,6 +6,10 @@
 @php
     $statusValue = $order->status instanceof \App\Enums\OrderStatus ? $order->status->value : (string) $order->status;
     $statusEnum = \App\Enums\OrderStatus::from($statusValue);
+    $paymentMethodEnum = $order->payment_method instanceof \App\Enums\PaymentMethod
+        ? $order->payment_method
+        : (\App\Enums\PaymentMethod::tryFrom((string) $order->payment_method) ?? \App\Enums\PaymentMethod::COUNTER_CASH);
+    $paymentStatusVal = $order->payment_status instanceof \App\Enums\PaymentStatus ? $order->payment_status->value : (string) $order->payment_status;
 @endphp
 
 <div class="flex-between" style="margin-bottom: 1.25rem;">
@@ -16,8 +20,40 @@
             Khách hàng: <strong>{{ $order->user?->name ?? 'Khách' }}</strong> · Phiên bản khóa đồng thời: <code>v{{ $order->version }}</code>
         </p>
     </div>
-    <div>
+    <div class="inline-actions">
+        <span class="badge badge-{{ $paymentStatusVal }}" style="font-size: 0.85rem; padding: 0.3rem 0.75rem;">{{ $paymentStatusVal }}</span>
         <span class="badge badge-{{ $statusValue }}" style="font-size: 0.9rem; padding: 0.35rem 0.85rem;">{{ $statusValue }}</span>
+    </div>
+</div>
+
+<div class="card">
+    <h2 style="font-size: 1.05rem; margin-top: 0;">Thông tin thanh toán & Thẻ học sinh</h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.85rem; font-size: 0.88rem;">
+        <div>
+            <div style="color: var(--text-muted); font-size: 0.78rem;">Phương thức thanh toán</div>
+            <div style="font-weight: 700;">{{ $paymentMethodEnum->label() }}</div>
+        </div>
+        <div>
+            <div style="color: var(--text-muted); font-size: 0.78rem;">Cửa hàng / Điểm bán</div>
+            <div style="font-weight: 600;">{{ $order->store_name ?? 'Căn tin trường' }}</div>
+        </div>
+        @if ($order->studentCard)
+            <div>
+                <div style="color: var(--text-muted); font-size: 0.78rem;">Thẻ học sinh</div>
+                <div style="font-weight: 700;">
+                    <a href="{{ route('admin.canteen.cards.show', $order->studentCard) }}" style="color: var(--brand-700); text-decoration: none;">
+                        {{ $order->studentCard->card_code }}
+                    </a>
+                    — {{ $order->studentCard->student?->full_name }} ({{ $order->studentCard->student?->class_name }})
+                </div>
+            </div>
+            <div>
+                <div style="color: var(--text-muted); font-size: 0.78rem;">Hạn mức còn lại sau giao dịch</div>
+                <div style="font-weight: 700; color: var(--brand-700);">
+                    {{ $order->remaining_limit_snapshot !== null ? number_format($order->remaining_limit_snapshot, 0, ',', '.').' ₫' : '—' }}
+                </div>
+            </div>
+        @endif
     </div>
 </div>
 

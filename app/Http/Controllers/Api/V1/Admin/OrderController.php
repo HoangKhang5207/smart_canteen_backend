@@ -39,7 +39,7 @@ class OrderController extends Controller
         $perPage = (int) ($validated['per_page'] ?? $validated['limit'] ?? 20);
 
         $query = Order::query()
-            ->with(['user', 'items.product', 'statusLogs.actor'])
+            ->with(['user', 'items.product', 'statusLogs.actor', 'studentCard.student'])
             ->orderByDesc('created_at')
             ->orderByDesc('id');
 

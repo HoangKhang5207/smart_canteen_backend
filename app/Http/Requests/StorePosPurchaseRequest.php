@@ -14,10 +14,17 @@ class StorePosPurchaseRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $headerKey = $this->header('Idempotency-Key');
-        $this->merge([
+        $merged = [
             'idempotency_key' => is_string($headerKey) ? trim($headerKey) : null,
-            'store_name' => is_string($this->input('store_name')) ? trim($this->input('store_name')) : null,
-        ]);
+        ];
+
+        $storeName = $this->input('store_name');
+        if (is_string($storeName)) {
+            $trimmed = trim($storeName);
+            $merged['store_name'] = $trimmed === '' ? null : $trimmed;
+        }
+
+        $this->merge($merged);
     }
 
     /**

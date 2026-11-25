@@ -1,0 +1,19 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      DEMO_LOGIN_ENABLED: "false"
+      OPCACHE_VALIDATE_TIMESTAMPS: "0"
+    volumes: !reset []
+
+  nginx:
+    image: !reset null
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
+    volumes: !reset []

@@ -1,58 +1,64 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Smart Canteen API — Laravel 13 Backend & Admin Blade Portal
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Sub-repository độc lập cho tầng Backend của hệ thống **Smart Canteen**: REST API (`/api/v1/*`, xác thực Laravel Sanctum) và Cổng Quản trị Admin/Staff (`/admin/*`, Laravel Blade + Session Auth + RBAC 3 cấp `customer`/`staff`/`admin`), sử dụng PostgreSQL 17.
 
-## About Laravel
+## Yêu cầu môi trường
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- **Khuyến nghị (Docker):** Docker Engine 24+ & Docker Compose V2 (không cần cài PHP/PostgreSQL trên host).
+- **Chạy thủ công trên host:** PHP `>= 8.4.1` (`pdo_pgsql`, `pgsql`, `bcmath`, `intl`, `mbstring`, `opcache`, `zip`), Composer `2.x`, PostgreSQL `17.x`.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
-
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
-
-## Learning Laravel
-
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+## Khởi chạy nhanh với Docker (Local / Dev / Testing)
 
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+cp .env.docker.example .env
+docker compose up -d --build
+docker compose exec app php artisan key:generate
+docker compose exec app php artisan migrate --seed
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+- **REST API:** `http://localhost:8000/api/v1`
+- **Healthcheck:** `http://localhost:8000/up`
+- **Cổng Quản trị Admin/Staff:** `http://localhost:8000/admin/login`
+  - Admin mẫu: `admin@smartcanteen.local` / `Admin@123456`
+  - Staff mẫu: `staff@smartcanteen.local` / `Staff@123456`
 
-## Contributing
+Container `postgres` tự động khởi tạo sẵn 2 database: `titkul_canteen_demo` (dev/demo) và `titkul_canteen_test` (PHPUnit).
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+### Chạy Production-like Stack (Local Staging Verification)
 
-## Code of Conduct
+```bash
+# Đảm bảo .env đã có APP_KEY và DB_PASSWORD mạnh
+docker compose -f compose.yaml -f compose.prod.yaml up -d --build
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+Production stack dùng image immutable (`target: production` không chứa `composer`/dev deps, chạy non-root `appuser:1000`) kết hợp `nginxinc/nginx-unprivileged:1.27-alpine` đóng gói sẵn `public/`.
 
-## Security Vulnerabilities
+## Kiểm thử & Chất lượng (Quality Gates)
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```bash
+# Chạy bên trong Docker container (khuyến nghị)
+docker compose exec app vendor/bin/pint --test
+docker compose exec app php artisan test
 
-## License
+# Hoặc chạy trực tiếp trên host có PHP 8.4+
+composer validate --strict
+vendor/bin/pint --test
+php artisan test
+```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+## GitHub Actions CI
+
+Pipeline tự động tại [.github/workflows/ci.yml](.github/workflows/ci.yml) chạy trên `push` và `pull_request` (`main`, `develop`):
+1. `code-quality`: PHP 8.4, `composer validate --strict`, Laravel Pint (`--test`).
+2. `tests`: PostgreSQL 17 service container, migrations & toàn bộ PHPUnit test suite.
+3. `security-audit`: `composer audit --locked`.
+4. `docker-build`: Validate Compose, build cả `dev`, `production` và `nginx`, smoke test non-root user & vắng mặt `composer` trong production image.
+
+## Gắn Remote GitHub cho Sub-repo độc lập
+
+```bash
+git remote add origin https://github.com/<org-or-user>/smart-canteen-api.git
+git branch -M main
+# Sau khi kiểm tra và merge nhánh làm việc vào main:
+git push -u origin main
+```

@@ -7,6 +7,7 @@ use App\Contracts\SmsGatewayInterface;
 use App\Enums\OtpPurpose;
 use App\Exceptions\SmsDeliveryException;
 use App\Services\Banking\MockEpayBankingGateway;
+use App\Services\Banking\SandboxBankingGateway;
 use App\Services\Sms\EsmsSmsGateway;
 use App\Services\Sms\LogSmsGateway;
 use App\Services\Sms\TwilioSmsGateway;
@@ -19,8 +20,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->singleton(BankingGatewayInterface::class, function () {
-            return new MockEpayBankingGateway;
+        $this->app->bind(BankingGatewayInterface::class, function ($app) {
+            $driver = strtolower(trim((string) config('services.banking.driver', 'sandbox')));
+
+            return match ($driver) {
+                'mock' => $app->make(MockEpayBankingGateway::class),
+                default => $app->make(SandboxBankingGateway::class),
+            };
         });
 
         $this->app->bind(SmsGatewayInterface::class, function ($app) {

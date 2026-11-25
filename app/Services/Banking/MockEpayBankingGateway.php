@@ -3,6 +3,9 @@
 namespace App\Services\Banking;
 
 use App\Contracts\BankingGatewayInterface;
+use App\Models\PaymentTransaction;
+use App\Services\SpendingLimitService;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 class MockEpayBankingGateway implements BankingGatewayInterface
@@ -124,5 +127,34 @@ class MockEpayBankingGateway implements BankingGatewayInterface
             'refunded' => true,
             'refund_reference' => 'EPAY-REF-'.Str::upper(Str::random(10)),
         ];
+    }
+
+    public function providerName(): string
+    {
+        return 'mock_epay';
+    }
+
+    public function fetchSettlementStatement(string $date): array
+    {
+        $startUtc = Carbon::parse($date, SpendingLimitService::TIMEZONE)->startOfDay()->utc();
+        $endUtc = Carbon::parse($date, SpendingLimitService::TIMEZONE)->endOfDay()->utc();
+
+        return PaymentTransaction::query()
+            ->with('order:id,code')
+            ->where('provider', $this->providerName())
+            ->where('type', 'CHARGE')
+            ->where('status', 'SUCCEEDED')
+            ->whereNotNull('provider_reference')
+            ->whereBetween('created_at', [$startUtc, $endUtc])
+            ->orderBy('id')
+            ->get()
+            ->map(fn (PaymentTransaction $tx): array => [
+                'provider_reference' => (string) $tx->provider_reference,
+                'order_code' => (string) ($tx->order?->code ?? $tx->gateway_txn_ref ?? ''),
+                'amount' => (int) $tx->amount,
+                'status' => 'SUCCEEDED',
+            ])
+            ->values()
+            ->all();
     }
 }

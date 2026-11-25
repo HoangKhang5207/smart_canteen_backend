@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\CategoryManagementController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\OrderManagementController;
 use App\Http\Controllers\Admin\ProductManagementController;
+use App\Http\Controllers\Admin\ReconciliationController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -31,6 +32,7 @@ Route::prefix('admin')->group(function () {
         Route::get('/canteen/cards/{studentCard}', [CanteenCardManagementController::class, 'show'])
             ->whereNumber('studentCard')
             ->name('admin.canteen.cards.show');
+        Route::get('/canteen/reconciliation', [ReconciliationController::class, 'index'])->name('admin.canteen.reconciliation.index');
 
         Route::middleware('role:admin')->group(function () {
             Route::patch('/canteen/cards/{studentCard}/status', [CanteenCardManagementController::class, 'updateStatus'])
@@ -39,6 +41,13 @@ Route::prefix('admin')->group(function () {
             Route::put('/canteen/cards/{studentCard}/spending-limit', [CanteenCardManagementController::class, 'updateSpendingLimit'])
                 ->whereNumber('studentCard')
                 ->name('admin.canteen.cards.limit');
+            Route::put('/canteen/cards/{studentCard}/sandbox-account', [CanteenCardManagementController::class, 'updateSandboxAccount'])
+                ->whereNumber('studentCard')
+                ->name('admin.canteen.cards.sandbox');
+            Route::post('/canteen/reconciliation/run', [ReconciliationController::class, 'run'])->name('admin.canteen.reconciliation.run');
+            Route::patch('/canteen/reconciliation/items/{item}/resolve', [ReconciliationController::class, 'resolveItem'])
+                ->whereNumber('item')
+                ->name('admin.canteen.reconciliation.resolve');
             Route::post('/categories', [CategoryManagementController::class, 'store'])->name('admin.categories.store');
             Route::put('/categories/{category}', [CategoryManagementController::class, 'update'])->name('admin.categories.update');
             Route::delete('/categories/{category}', [CategoryManagementController::class, 'destroy'])->name('admin.categories.destroy');

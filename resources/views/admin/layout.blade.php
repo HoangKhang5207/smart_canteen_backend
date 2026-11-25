@@ -129,9 +129,9 @@
         .badge-READY { background: #D8F0D2; color: #14532D; }
         .badge-COMPLETED { background: #F3F4F6; color: #374151; }
         .badge-CANCELLED { background: #FEE2E2; color: #991B1B; }
-        .badge-ACTIVE, .badge-PAID { background: #D8F0D2; color: #14532D; }
-        .badge-LOCKED, .badge-UNPAID, .badge-PENDING_OTP { background: #FEF3C7; color: #92400E; }
-        .badge-REVOKED, .badge-FAILED { background: #FEE2E2; color: #991B1B; }
+        .badge-ACTIVE, .badge-PAID, .badge-SUCCEEDED, .badge-MATCHED { background: #D8F0D2; color: #14532D; }
+        .badge-LOCKED, .badge-UNPAID, .badge-PENDING_OTP, .badge-TIMEOUT, .badge-PENDING_RECONCILE, .badge-HAS_DISCREPANCIES { background: #FEF3C7; color: #92400E; }
+        .badge-REVOKED, .badge-FAILED, .badge-MISSING_IN_BANK, .badge-MISSING_LOCAL, .badge-AMOUNT_MISMATCH, .badge-STATUS_MISMATCH { background: #FEE2E2; color: #991B1B; }
         .badge-REFUNDED { background: #DBEAFE; color: #1E40AF; }
         .badge-UNLINKED, .badge-EXPIRED { background: #F3F4F6; color: #374151; }
         table {
@@ -236,7 +236,8 @@
         <nav class="nav-links" aria-label="Điều hướng quản trị">
             <a href="{{ route('admin.dashboard') }}" class="nav-link {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}">Tổng quan hôm nay</a>
             <a href="{{ route('admin.orders.index') }}" class="nav-link {{ request()->routeIs('admin.orders.*') ? 'active' : '' }}">Điều phối đơn hàng</a>
-            <a href="{{ route('admin.canteen.cards.index') }}" class="nav-link {{ request()->routeIs('admin.canteen.*') ? 'active' : '' }}">Căn tin số</a>
+            <a href="{{ route('admin.canteen.cards.index') }}" class="nav-link {{ request()->routeIs('admin.canteen.cards.*') ? 'active' : '' }}">Căn tin số</a>
+            <a href="{{ route('admin.canteen.reconciliation.index') }}" class="nav-link {{ request()->routeIs('admin.canteen.reconciliation.*') ? 'active' : '' }}">Đối soát & GD</a>
             <a href="{{ route('admin.products.index') }}" class="nav-link {{ request()->routeIs('admin.products.*') ? 'active' : '' }}">Món ăn</a>
             <a href="{{ route('admin.categories.index') }}" class="nav-link {{ request()->routeIs('admin.categories.*') ? 'active' : '' }}">Danh mục</a>
         </nav>

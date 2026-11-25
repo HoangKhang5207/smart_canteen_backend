@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\CanteenCardController;
 use App\Http\Controllers\Api\V1\CanteenPosPurchaseController;
 use App\Http\Controllers\Api\V1\CanteenSpendingLimitController;
 use App\Http\Controllers\Api\V1\CategoryController;
+use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\VnpayPaymentController;
@@ -44,6 +45,13 @@ Route::prefix('v1')->group(function () {
         Route::post('/orders', [OrderController::class, 'store']);
         Route::get('/orders/{id}', [OrderController::class, 'show'])->whereNumber('id');
         Route::post('/payments/vnpay/create-url', [VnpayPaymentController::class, 'createUrl'])->middleware('throttle:20,1');
+
+        Route::prefix('notifications')->group(function () {
+            Route::get('/', [NotificationController::class, 'index']);
+            Route::get('/unread-count', [NotificationController::class, 'unreadCount']);
+            Route::patch('/{id}/read', [NotificationController::class, 'markAsRead'])->whereNumber('id');
+            Route::post('/read-all', [NotificationController::class, 'markAllAsRead']);
+        });
 
         Route::prefix('canteen')->group(function () {
             Route::get('/cards', [CanteenCardController::class, 'index']);

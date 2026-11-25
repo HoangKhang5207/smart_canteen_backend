@@ -29,6 +29,7 @@ class SpendingLimitService
     public function __construct(
         private readonly BankingGatewayInterface $gateway,
         private readonly PaymentLedgerService $ledger,
+        private readonly NotificationService $notifications,
     ) {}
 
     public function gatewayProviderName(): string
@@ -131,6 +132,8 @@ class SpendingLimitService
                     'reason' => $normalizedReason,
                     'created_at' => now(),
                 ]);
+
+                $this->notifications->notifySpendingLimitUpdated($card, $previousLimit, $newDailyLimit, $user->name);
             }
 
             return $card->load(['student', 'activeBankLink', 'spendingLimit']);
@@ -209,6 +212,8 @@ class SpendingLimitService
                     'reason' => $normalizedReason,
                     'created_at' => now(),
                 ]);
+
+                $this->notifications->notifySpendingLimitUpdated($card, $previousLimit, $newDailyLimit, $admin->name.' (Admin)');
             }
 
             return $card->load(['student', 'activeBankLink', 'spendingLimit']);

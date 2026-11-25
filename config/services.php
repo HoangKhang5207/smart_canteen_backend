@@ -69,4 +69,18 @@ return [
         ],
     ],
 
+    'notifications' => [
+        'push_driver' => env('NOTIFICATION_PUSH_DRIVER', 'log'),
+        'zalo_oa' => [
+            'endpoint' => env('ZALO_OA_ENDPOINT', 'https://openapi.zalo.me/v3.0/oa/message/cs'),
+            'access_token' => env('ZALO_OA_ACCESS_TOKEN', ''),
+        ],
+        'zalo_zns' => [
+            'endpoint' => env('ZALO_ZNS_ENDPOINT', 'https://business.zalo.me/api/template/message'),
+            'access_token' => env('ZALO_ZNS_ACCESS_TOKEN', ''),
+            'template_id' => env('ZALO_ZNS_TEMPLATE_ID', ''),
+            'sandbox' => filter_var(env('ZALO_ZNS_SANDBOX', true), FILTER_VALIDATE_BOOL),
+        ],
+    ],
+
 ];

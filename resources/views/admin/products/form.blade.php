@@ -39,6 +39,9 @@
                 </div>
                 <div>
                     <label for="stock_quantity" style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.3rem;">Tồn kho (để trống = không giới hạn)</label>
+                    @if ($isEdit)
+                        <input type="hidden" name="original_stock_quantity" value="{{ old('original_stock_quantity', $product->stock_quantity ?? '') }}">
+                    @endif
                     <input id="stock_quantity" type="number" name="stock_quantity" value="{{ old('stock_quantity', $product->stock_quantity) }}" min="0" max="100000" placeholder="Không giới hạn">
                 </div>
                 <div>

@@ -20,6 +20,7 @@ class StudentCardService
 {
     public function __construct(
         private readonly BankingGatewayInterface $gateway,
+        private readonly NotificationService $notifications,
     ) {}
 
     /**
@@ -154,6 +155,7 @@ class StudentCardService
             }
 
             $lockedCard->update(['status' => $nextStatus]);
+            $this->notifications->notifyBankLinkChanged($lockedCard, $nextStatus->value);
 
             return $lockedCard->load(['student', 'activeBankLink', 'spendingLimit']);
         });

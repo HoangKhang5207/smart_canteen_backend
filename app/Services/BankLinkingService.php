@@ -25,6 +25,7 @@ class BankLinkingService
         private readonly BankingGatewayInterface $gateway,
         private readonly DataMaskingService $masking,
         private readonly SmsGatewayInterface $smsGateway,
+        private readonly NotificationService $notifications,
     ) {}
 
     /**
@@ -363,6 +364,8 @@ class BankLinkingService
                     'status' => BankLinkStatus::ACTIVE,
                     'linked_at' => $now,
                 ]);
+
+                $this->notifications->notifyBankLinkChanged($card, 'LINKED', $bankLink);
 
                 return [
                     'ok' => true,
@@ -798,6 +801,8 @@ class BankLinkingService
                 'status' => BankLinkStatus::UNLINKED,
                 'unlinked_at' => $now,
             ]);
+
+            $this->notifications->notifyBankLinkChanged($card, 'UNLINKED', $bankLink);
 
             return [
                 'ok' => true,

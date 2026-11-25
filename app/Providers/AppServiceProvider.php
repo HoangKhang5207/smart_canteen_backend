@@ -3,14 +3,19 @@
 namespace App\Providers;
 
 use App\Contracts\BankingGatewayInterface;
+use App\Contracts\PushNotificationChannelInterface;
 use App\Contracts\SmsGatewayInterface;
 use App\Enums\OtpPurpose;
 use App\Exceptions\SmsDeliveryException;
 use App\Services\Banking\MockEpayBankingGateway;
 use App\Services\Banking\SandboxBankingGateway;
+use App\Services\Notification\LogPushNotificationChannel;
+use App\Services\Notification\ZaloOaPushChannel;
+use App\Services\Notification\ZaloZnsPushChannel;
 use App\Services\Sms\EsmsSmsGateway;
 use App\Services\Sms\LogSmsGateway;
 use App\Services\Sms\TwilioSmsGateway;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -47,6 +52,21 @@ class AppServiceProvider extends ServiceProvider
                         );
                     }
                 },
+            };
+        });
+
+        $this->app->bind(PushNotificationChannelInterface::class, function ($app) {
+            $driver = strtolower(trim((string) config('services.notifications.push_driver', 'log')));
+
+            return match ($driver) {
+                'log' => $app->make(LogPushNotificationChannel::class),
+                'zalo_oa' => $app->make(ZaloOaPushChannel::class),
+                'zalo_zns' => $app->make(ZaloZnsPushChannel::class),
+                default => tap($app->make(LogPushNotificationChannel::class), function () use ($driver): void {
+                    Log::warning('Unknown NOTIFICATION_PUSH_DRIVER, falling back to log', [
+                        'driver' => $driver,
+                    ]);
+                }),
             };
         });
     }

@@ -197,5 +197,23 @@ class ProductInventoryTest extends TestCase
             ->assertRedirect();
 
         $this->assertNull($product->fresh()->stock_quantity);
+
+        // Metadata-only edit preserves concurrent stock decrements when original_stock_quantity matches stock_quantity
+        $product->update(['stock_quantity' => 8]);
+        // Simulate concurrent order decrementing DB stock from 10 -> 8 while Admin had 10 open in edit form
+        $this->actingAs($admin)
+            ->put(route('admin.products.update', $product), [
+                'category_id' => $category->id,
+                'name' => 'Phở bò đặc biệt',
+                'price' => 50000,
+                'is_available' => '1',
+                'stock_quantity' => '10',
+                'original_stock_quantity' => '10',
+                'low_stock_threshold' => '5',
+            ])
+            ->assertRedirect('/admin/products');
+
+        $this->assertSame('Phở bò đặc biệt', $product->fresh()->name);
+        $this->assertSame(8, $product->fresh()->stock_quantity);
     }
 }

@@ -233,6 +233,17 @@ class DigitalCanteenBankLinkTest extends TestCase
         $this->postJson("/api/v1/canteen/bank-links/{$bankLinkId}/verify-otp", [
             'otp_code' => $correctOtp,
         ])->assertStatus(429);
+
+        // Lockout must also mark bank_link FAILED and block resend-otp bypass (even after cooldown)
+        $this->assertSame(
+            BankLinkStatus::FAILED,
+            BankLink::query()->findOrFail($bankLinkId)->status,
+        );
+
+        $this->travel(35)->seconds();
+        $this->postJson("/api/v1/canteen/bank-links/{$bankLinkId}/resend-otp")
+            ->assertStatus(429)
+            ->assertJsonPath('error_code', 'OTP_MAX_ATTEMPTS_EXCEEDED');
     }
 
     public function test_rejects_expired_otp_after_ttl(): void

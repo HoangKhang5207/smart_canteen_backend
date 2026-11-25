@@ -176,92 +176,47 @@ class BankLinkingService
 
     public function verifyOtp(User $user, int $bankLinkId, string $otpCode): StudentCard
     {
-        $outcome = DB::transaction(function () use ($user, $bankLinkId, $otpCode): array {
-            /** @var BankLink|null $bankLink */
-            $bankLink = BankLink::query()
-                ->whereKey($bankLinkId)
-                ->where('user_id', $user->id)
-                ->lockForUpdate()
-                ->first();
+        $studentCardId = BankLink::query()
+            ->whereKey($bankLinkId)
+            ->where('user_id', $user->id)
+            ->value('student_card_id');
 
-            if ($bankLink === null) {
-                return [
-                    'ok' => false,
-                    'exception' => (new ModelNotFoundException)->setModel(BankLink::class, [$bankLinkId]),
-                ];
-            }
+        if ($studentCardId === null) {
+            throw (new ModelNotFoundException)->setModel(BankLink::class, [$bankLinkId]);
+        }
 
-            if ($bankLink->status !== BankLinkStatus::PENDING_OTP) {
-                $errorCode = $bankLink->status === BankLinkStatus::ACTIVE
-                    ? 'BANK_LINK_ALREADY_ACTIVE'
-                    : 'BANK_LINK_INVALID_STATE';
+        try {
+            $outcome = DB::transaction(function () use ($user, $studentCardId, $bankLinkId, $otpCode): array {
+                // Canonical lock order: student_cards -> bank_links -> otp_verifications
+                /** @var StudentCard|null $card */
+                $card = StudentCard::query()
+                    ->whereKey($studentCardId)
+                    ->whereHas('student', fn ($q) => $q->where('user_id', $user->id)->where('is_active', true))
+                    ->lockForUpdate()
+                    ->first();
 
-                return [
-                    'ok' => false,
-                    'exception' => new BankLinkConflictException(
-                        'Phiên liên kết ngân hàng không còn ở trạng thái chờ xác thực OTP.',
-                        $errorCode,
-                    ),
-                ];
-            }
-
-            /** @var OtpVerification|null $otp */
-            $otp = OtpVerification::query()
-                ->where('bank_link_id', $bankLink->id)
-                ->where('purpose', OtpPurpose::BANK_LINK->value)
-                ->latest('id')
-                ->lockForUpdate()
-                ->first();
-
-            if ($otp === null || $otp->verified_at !== null) {
-                return [
-                    'ok' => false,
-                    'exception' => new OtpVerificationException(
-                        'Phiên xác thực OTP không hợp lệ. Vui lòng khởi tạo lại.',
-                        'OTP_EXPIRED',
-                        422,
-                    ),
-                ];
-            }
-
-            if ($otp->attempts >= $otp->max_attempts) {
-                return [
-                    'ok' => false,
-                    'exception' => new OtpVerificationException(
-                        'Bạn đã nhập sai mã OTP quá số lần cho phép. Vui lòng yêu cầu gửi lại hoặc đăng ký lại.',
-                        'OTP_MAX_ATTEMPTS_EXCEEDED',
-                        429,
-                        ['remaining_attempts' => 0],
-                    ),
-                ];
-            }
-
-            if ($otp->invalidated_at !== null || $otp->expires_at->isPast()) {
-                if ($otp->invalidated_at === null) {
-                    $otp->update(['invalidated_at' => now()]);
+                if ($card === null) {
+                    return [
+                        'ok' => false,
+                        'exception' => (new ModelNotFoundException)->setModel(BankLink::class, [$bankLinkId]),
+                    ];
                 }
 
-                return [
-                    'ok' => false,
-                    'exception' => new OtpVerificationException(
-                        'Mã OTP đã hết hạn. Vui lòng gửi lại mã OTP mới.',
-                        'OTP_EXPIRED',
-                        422,
-                    ),
-                ];
-            }
+                /** @var BankLink|null $bankLink */
+                $bankLink = BankLink::query()
+                    ->whereKey($bankLinkId)
+                    ->where('user_id', $user->id)
+                    ->lockForUpdate()
+                    ->first();
 
-            if (! Hash::check($otpCode, $otp->code_hash)) {
-                $nextAttempts = $otp->attempts + 1;
-                $remainingAttempts = max(0, $otp->max_attempts - $nextAttempts);
-
-                $updates = ['attempts' => $nextAttempts];
-                if ($nextAttempts >= $otp->max_attempts) {
-                    $updates['invalidated_at'] = now();
+                if ($bankLink === null) {
+                    return [
+                        'ok' => false,
+                        'exception' => (new ModelNotFoundException)->setModel(BankLink::class, [$bankLinkId]),
+                    ];
                 }
-                $otp->update($updates);
 
-                if ($nextAttempts >= $otp->max_attempts) {
+                if ($bankLink->status === BankLinkStatus::FAILED) {
                     return [
                         'ok' => false,
                         'exception' => new OtpVerificationException(
@@ -273,63 +228,147 @@ class BankLinkingService
                     ];
                 }
 
-                return [
-                    'ok' => false,
-                    'exception' => new OtpVerificationException(
-                        sprintf('Mã OTP không chính xác. Bạn còn %d lần thử.', $remainingAttempts),
-                        'OTP_INVALID',
-                        422,
-                        ['remaining_attempts' => $remainingAttempts],
-                    ),
-                ];
-            }
+                if ($bankLink->status !== BankLinkStatus::PENDING_OTP) {
+                    $errorCode = $bankLink->status === BankLinkStatus::ACTIVE
+                        ? 'BANK_LINK_ALREADY_ACTIVE'
+                        : 'BANK_LINK_INVALID_STATE';
 
-            /** @var StudentCard $card */
-            $card = StudentCard::query()
-                ->whereKey($bankLink->student_card_id)
-                ->lockForUpdate()
-                ->firstOrFail();
+                    return [
+                        'ok' => false,
+                        'exception' => new BankLinkConflictException(
+                            'Phiên liên kết ngân hàng không còn ở trạng thái chờ xác thực OTP.',
+                            $errorCode,
+                        ),
+                    ];
+                }
 
-            $hasActiveLink = BankLink::query()
-                ->where('student_card_id', $card->id)
-                ->where('status', BankLinkStatus::ACTIVE->value)
-                ->exists();
+                if ($card->status !== StudentCardStatus::ACTIVE) {
+                    return [
+                        'ok' => false,
+                        'exception' => ValidationException::withMessages([
+                            'card' => ['Thẻ học sinh hiện không ở trạng thái hoạt động nên không thể hoàn tất liên kết.'],
+                        ]),
+                    ];
+                }
 
-            if ($hasActiveLink) {
-                return [
-                    'ok' => false,
-                    'exception' => new BankLinkConflictException(
-                        'Thẻ học sinh này đã được liên kết với một tài khoản ngân hàng.',
-                        'CARD_ALREADY_LINKED',
-                    ),
-                ];
-            }
+                /** @var OtpVerification|null $otp */
+                $otp = OtpVerification::query()
+                    ->where('bank_link_id', $bankLink->id)
+                    ->where('purpose', OtpPurpose::BANK_LINK->value)
+                    ->latest('id')
+                    ->lockForUpdate()
+                    ->first();
 
-            $this->gateway->confirmAutoDebitLink((string) $bankLink->provider_reference);
+                if ($otp === null || $otp->verified_at !== null) {
+                    return [
+                        'ok' => false,
+                        'exception' => new OtpVerificationException(
+                            'Phiên xác thực OTP không hợp lệ. Vui lòng khởi tạo lại.',
+                            'OTP_EXPIRED',
+                            422,
+                        ),
+                    ];
+                }
 
-            $now = now();
-            $otp->update(['verified_at' => $now]);
+                if ($otp->attempts >= $otp->max_attempts) {
+                    $bankLink->update(['status' => BankLinkStatus::FAILED]);
 
-            try {
+                    return [
+                        'ok' => false,
+                        'exception' => new OtpVerificationException(
+                            'Bạn đã nhập sai mã OTP quá số lần cho phép. Vui lòng đăng ký liên kết lại.',
+                            'OTP_MAX_ATTEMPTS_EXCEEDED',
+                            429,
+                            ['remaining_attempts' => 0],
+                        ),
+                    ];
+                }
+
+                if ($otp->invalidated_at !== null || $otp->expires_at->isPast()) {
+                    if ($otp->invalidated_at === null) {
+                        $otp->update(['invalidated_at' => now()]);
+                    }
+
+                    return [
+                        'ok' => false,
+                        'exception' => new OtpVerificationException(
+                            'Mã OTP đã hết hạn. Vui lòng gửi lại mã OTP mới.',
+                            'OTP_EXPIRED',
+                            422,
+                        ),
+                    ];
+                }
+
+                if (! Hash::check($otpCode, $otp->code_hash)) {
+                    $nextAttempts = $otp->attempts + 1;
+                    $remainingAttempts = max(0, $otp->max_attempts - $nextAttempts);
+
+                    $updates = ['attempts' => $nextAttempts];
+                    if ($nextAttempts >= $otp->max_attempts) {
+                        $updates['invalidated_at'] = now();
+                    }
+                    $otp->update($updates);
+
+                    if ($nextAttempts >= $otp->max_attempts) {
+                        $bankLink->update(['status' => BankLinkStatus::FAILED]);
+
+                        return [
+                            'ok' => false,
+                            'exception' => new OtpVerificationException(
+                                'Bạn đã nhập sai mã OTP quá số lần cho phép. Vui lòng đăng ký liên kết lại.',
+                                'OTP_MAX_ATTEMPTS_EXCEEDED',
+                                429,
+                                ['remaining_attempts' => 0],
+                            ),
+                        ];
+                    }
+
+                    return [
+                        'ok' => false,
+                        'exception' => new OtpVerificationException(
+                            sprintf('Mã OTP không chính xác. Bạn còn %d lần thử.', $remainingAttempts),
+                            'OTP_INVALID',
+                            422,
+                            ['remaining_attempts' => $remainingAttempts],
+                        ),
+                    ];
+                }
+
+                $hasActiveLink = BankLink::query()
+                    ->where('student_card_id', $card->id)
+                    ->where('status', BankLinkStatus::ACTIVE->value)
+                    ->exists();
+
+                if ($hasActiveLink) {
+                    return [
+                        'ok' => false,
+                        'exception' => new BankLinkConflictException(
+                            'Thẻ học sinh này đã được liên kết với một tài khoản ngân hàng.',
+                            'CARD_ALREADY_LINKED',
+                        ),
+                    ];
+                }
+
+                $this->gateway->confirmAutoDebitLink((string) $bankLink->provider_reference);
+
+                $now = now();
+                $otp->update(['verified_at' => $now]);
                 $bankLink->update([
                     'status' => BankLinkStatus::ACTIVE,
                     'linked_at' => $now,
                 ]);
-            } catch (UniqueConstraintViolationException) {
-                return [
-                    'ok' => false,
-                    'exception' => new BankLinkConflictException(
-                        'Thẻ học sinh này đã được liên kết với một tài khoản ngân hàng.',
-                        'CARD_ALREADY_LINKED',
-                    ),
-                ];
-            }
 
-            return [
-                'ok' => true,
-                'card' => $card->load(['student', 'activeBankLink']),
-            ];
-        });
+                return [
+                    'ok' => true,
+                    'card' => $card->load(['student', 'activeBankLink']),
+                ];
+            });
+        } catch (UniqueConstraintViolationException) {
+            throw new BankLinkConflictException(
+                'Thẻ học sinh này đã được liên kết với một tài khoản ngân hàng.',
+                'CARD_ALREADY_LINKED',
+            );
+        }
 
         if (! $outcome['ok']) {
             throw $outcome['exception'];
@@ -343,11 +382,32 @@ class BankLinkingService
      */
     public function resendOtp(User $user, int $bankLinkId): array
     {
+        $studentCardId = BankLink::query()
+            ->whereKey($bankLinkId)
+            ->where('user_id', $user->id)
+            ->value('student_card_id');
+
+        if ($studentCardId === null) {
+            throw (new ModelNotFoundException)->setModel(BankLink::class, [$bankLinkId]);
+        }
+
         $ttlSeconds = max(30, (int) config('services.banking.otp_ttl_seconds', 180));
         $cooldownSeconds = max(5, (int) config('services.banking.otp_resend_cooldown_seconds', 30));
         $maxAttempts = max(1, (int) config('services.banking.otp_max_attempts', 5));
 
-        return DB::transaction(function () use ($user, $bankLinkId, $ttlSeconds, $cooldownSeconds, $maxAttempts): array {
+        return DB::transaction(function () use ($user, $studentCardId, $bankLinkId, $ttlSeconds, $cooldownSeconds, $maxAttempts): array {
+            // Canonical lock order: student_cards -> bank_links -> otp_verifications
+            /** @var StudentCard|null $card */
+            $card = StudentCard::query()
+                ->whereKey($studentCardId)
+                ->whereHas('student', fn ($q) => $q->where('user_id', $user->id)->where('is_active', true))
+                ->lockForUpdate()
+                ->first();
+
+            if ($card === null) {
+                throw (new ModelNotFoundException)->setModel(BankLink::class, [$bankLinkId]);
+            }
+
             /** @var BankLink|null $bankLink */
             $bankLink = BankLink::query()
                 ->whereKey($bankLinkId)
@@ -359,11 +419,26 @@ class BankLinkingService
                 throw (new ModelNotFoundException)->setModel(BankLink::class, [$bankLinkId]);
             }
 
+            if ($bankLink->status === BankLinkStatus::FAILED) {
+                throw new OtpVerificationException(
+                    'Phiên liên kết đã bị khóa do nhập sai OTP quá số lần cho phép. Vui lòng đăng ký liên kết lại.',
+                    'OTP_MAX_ATTEMPTS_EXCEEDED',
+                    429,
+                    ['remaining_attempts' => 0],
+                );
+            }
+
             if ($bankLink->status !== BankLinkStatus::PENDING_OTP) {
                 throw new BankLinkConflictException(
                     'Không thể gửi lại OTP cho phiên liên kết không còn ở trạng thái chờ xác thực.',
                     'BANK_LINK_INVALID_STATE',
                 );
+            }
+
+            if ($card->status !== StudentCardStatus::ACTIVE) {
+                throw ValidationException::withMessages([
+                    'card' => ['Thẻ học sinh hiện không ở trạng thái hoạt động nên không thể gửi lại OTP.'],
+                ]);
             }
 
             /** @var OtpVerification|null $latestOtp */
@@ -379,6 +454,22 @@ class BankLinkingService
                     'Không tìm thấy phiên OTP để gửi lại.',
                     'OTP_EXPIRED',
                     422,
+                );
+            }
+
+            if ($latestOtp->verified_at !== null) {
+                throw new BankLinkConflictException(
+                    'Phiên liên kết đã được xác thực trước đó.',
+                    'BANK_LINK_INVALID_STATE',
+                );
+            }
+
+            if ($latestOtp->attempts >= $latestOtp->max_attempts) {
+                throw new OtpVerificationException(
+                    'Phiên liên kết đã bị khóa do nhập sai OTP quá số lần cho phép. Vui lòng đăng ký liên kết lại.',
+                    'OTP_MAX_ATTEMPTS_EXCEEDED',
+                    429,
+                    ['remaining_attempts' => 0],
                 );
             }
 

@@ -42,4 +42,21 @@ return [
         'auto_provision_demo_card' => filter_var(env('BANKING_AUTO_PROVISION_DEMO_CARD', false), FILTER_VALIDATE_BOOL),
     ],
 
+    'sms' => [
+        'driver' => env('SMS_DRIVER', 'log'),
+        'brandname' => env('SMS_BRANDNAME', 'SmartCanteen'),
+        'esms' => [
+            'endpoint' => env('ESMS_ENDPOINT', 'https://rest.esms.vn/MainService.svc/json/SendMultipleMessage_V4_post_json/'),
+            'api_key' => env('ESMS_API_KEY', ''),
+            'secret_key' => env('ESMS_SECRET_KEY', ''),
+            'sms_type' => (int) env('ESMS_SMS_TYPE', 2),
+            'sandbox' => filter_var(env('ESMS_SANDBOX', true), FILTER_VALIDATE_BOOL),
+        ],
+        'twilio' => [
+            'account_sid' => env('TWILIO_ACCOUNT_SID', ''),
+            'auth_token' => env('TWILIO_AUTH_TOKEN', ''),
+            'from' => env('TWILIO_FROM', ''),
+        ],
+    ],
+
 ];

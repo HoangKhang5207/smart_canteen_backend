@@ -13,13 +13,24 @@ class StudentCardSeeder extends Seeder
 {
     public function run(): void
     {
+        $demoPhoneFree = ! User::query()->where('phone', '0901234567')->exists();
+
         $demoUser = User::firstOrCreate(
             ['zalo_user_id' => 'demo_customer1'],
-            [
+            array_filter([
                 'name' => 'Khách hàng Demo',
                 'role' => UserRole::CUSTOMER,
-            ],
+                'phone' => $demoPhoneFree ? '0901234567' : null,
+                'phone_verified_at' => $demoPhoneFree ? now() : null,
+            ], fn ($v) => $v !== null),
         );
+
+        if ($demoUser->phone === null && ! User::query()->where('phone', '0901234567')->exists()) {
+            $demoUser->update([
+                'phone' => '0901234567',
+                'phone_verified_at' => now(),
+            ]);
+        }
 
         $student = Student::firstOrCreate(
             ['student_code' => 'HS-2026-0001'],

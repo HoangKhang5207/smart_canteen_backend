@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Contracts\BankingGatewayInterface;
+use App\Contracts\SmsGatewayInterface;
 use App\Enums\BankLinkStatus;
 use App\Enums\OtpPurpose;
 use App\Enums\StudentCardStatus;
@@ -23,6 +24,7 @@ class BankLinkingService
     public function __construct(
         private readonly BankingGatewayInterface $gateway,
         private readonly DataMaskingService $masking,
+        private readonly SmsGatewayInterface $smsGateway,
     ) {}
 
     /**
@@ -148,6 +150,7 @@ class BankLinkingService
             ]);
 
             $otpCode = $this->generateSixDigitOtp();
+            $delivery = $this->smsGateway->sendOtp($phoneNumber, $otpCode, OtpPurpose::BANK_LINK, $ttlSeconds);
             $now = now();
 
             $otp = OtpVerification::create([
@@ -155,6 +158,9 @@ class BankLinkingService
                 'bank_link_id' => $bankLink->id,
                 'purpose' => OtpPurpose::BANK_LINK,
                 'phone_masked' => $phoneMasked,
+                'delivery_provider' => $delivery['provider'],
+                'delivery_status' => $delivery['status'],
+                'delivery_reference' => $delivery['reference'],
                 'code_hash' => Hash::make($otpCode),
                 'attempts' => 0,
                 'max_attempts' => $maxAttempts,
@@ -500,12 +506,16 @@ class BankLinkingService
             }
 
             $otpCode = $this->generateSixDigitOtp();
+            $delivery = $this->smsGateway->sendOtp($bankLink->phone_number, $otpCode, OtpPurpose::BANK_LINK, $ttlSeconds);
 
             $newOtp = OtpVerification::create([
                 'user_id' => $user->id,
                 'bank_link_id' => $bankLink->id,
                 'purpose' => OtpPurpose::BANK_LINK,
                 'phone_masked' => $bankLink->phone_masked,
+                'delivery_provider' => $delivery['provider'],
+                'delivery_status' => $delivery['status'],
+                'delivery_reference' => $delivery['reference'],
                 'code_hash' => Hash::make($otpCode),
                 'attempts' => 0,
                 'max_attempts' => $maxAttempts,
@@ -617,12 +627,16 @@ class BankLinkingService
                 ->update(['invalidated_at' => $now]);
 
             $otpCode = $this->generateSixDigitOtp();
+            $delivery = $this->smsGateway->sendOtp($bankLink->phone_number, $otpCode, OtpPurpose::BANK_UNLINK, $ttlSeconds);
 
             $otp = OtpVerification::create([
                 'user_id' => $user->id,
                 'bank_link_id' => $bankLink->id,
                 'purpose' => OtpPurpose::BANK_UNLINK,
                 'phone_masked' => $bankLink->phone_masked,
+                'delivery_provider' => $delivery['provider'],
+                'delivery_status' => $delivery['status'],
+                'delivery_reference' => $delivery['reference'],
                 'code_hash' => Hash::make($otpCode),
                 'attempts' => 0,
                 'max_attempts' => $maxAttempts,
@@ -913,12 +927,16 @@ class BankLinkingService
             }
 
             $otpCode = $this->generateSixDigitOtp();
+            $delivery = $this->smsGateway->sendOtp($bankLink->phone_number, $otpCode, OtpPurpose::BANK_UNLINK, $ttlSeconds);
 
             $newOtp = OtpVerification::create([
                 'user_id' => $user->id,
                 'bank_link_id' => $bankLink->id,
                 'purpose' => OtpPurpose::BANK_UNLINK,
                 'phone_masked' => $bankLink->phone_masked,
+                'delivery_provider' => $delivery['provider'],
+                'delivery_status' => $delivery['status'],
+                'delivery_reference' => $delivery['reference'],
                 'code_hash' => Hash::make($otpCode),
                 'attempts' => 0,
                 'max_attempts' => $maxAttempts,
@@ -960,6 +978,8 @@ class BankLinkingService
             'remaining_attempts' => max(0, $otp->max_attempts - $otp->attempts),
             'max_resends' => $otp->max_resends,
             'remaining_resends' => max(0, $otp->max_resends - $otp->resend_count),
+            'delivery_channel' => 'SMS',
+            'delivery_provider' => $otp->delivery_provider ?? 'log',
         ];
 
         if ($this->shouldExposeDebugOtp()) {

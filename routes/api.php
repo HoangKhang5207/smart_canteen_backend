@@ -20,7 +20,9 @@ Route::get('/user', function (Request $request) {
 
 Route::prefix('v1')->group(function () {
     Route::post('/auth/zalo', [AuthController::class, 'loginZalo']);
+    Route::post('/auth/zalo-phone', [AuthController::class, 'loginZaloPhone'])->middleware('throttle:20,1');
     Route::post('/auth/demo', [AuthController::class, 'loginDemo']);
+    Route::post('/auth/demo-phone', [AuthController::class, 'loginDemoPhone'])->middleware('throttle:20,1');
 
     Route::get('/categories', [CategoryController::class, 'index']);
     Route::get('/products', [ProductController::class, 'index']);
@@ -29,6 +31,7 @@ Route::prefix('v1')->group(function () {
 
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/auth/me', [AuthController::class, 'me']);
+        Route::post('/auth/logout', [AuthController::class, 'logout']);
 
         Route::get('/orders', [OrderController::class, 'index']);
         Route::post('/orders', [OrderController::class, 'store']);

@@ -32,4 +32,14 @@ class User extends Authenticatable
     {
         return $this->hasMany(Order::class);
     }
+
+    public function students(): HasMany
+    {
+        return $this->hasMany(Student::class);
+    }
+
+    public function bankLinks(): HasMany
+    {
+        return $this->hasMany(BankLink::class);
+    }
 }

@@ -48,25 +48,28 @@ Route::prefix('v1')->group(function () {
         Route::prefix('canteen')->group(function () {
             Route::get('/cards', [CanteenCardController::class, 'index']);
             Route::get('/cards/{cardId}', [CanteenCardController::class, 'show'])->whereNumber('cardId');
-            Route::post('/cards/{cardId}/bank-links', [CanteenBankLinkController::class, 'store'])
-                ->whereNumber('cardId')
-                ->middleware('throttle:20,1');
-            Route::post('/bank-links/{bankLinkId}/verify-otp', [CanteenBankLinkController::class, 'verifyOtp'])->whereNumber('bankLinkId');
-            Route::post('/bank-links/{bankLinkId}/resend-otp', [CanteenBankLinkController::class, 'resendOtp'])->whereNumber('bankLinkId');
-            Route::post('/bank-links/{bankLinkId}/unlink/initiate', [CanteenBankLinkController::class, 'initiateUnlink'])
-                ->whereNumber('bankLinkId')
-                ->middleware('throttle:10,1');
-            Route::post('/bank-links/{bankLinkId}/unlink/verify-otp', [CanteenBankLinkController::class, 'verifyUnlinkOtp'])
-                ->whereNumber('bankLinkId')
-                ->middleware('throttle:10,1');
-            Route::post('/bank-links/{bankLinkId}/unlink/resend-otp', [CanteenBankLinkController::class, 'resendUnlinkOtp'])
-                ->whereNumber('bankLinkId')
-                ->middleware('throttle:10,1');
-
-            Route::put('/cards/{cardId}/spending-limit', [CanteenSpendingLimitController::class, 'update'])->whereNumber('cardId');
             Route::get('/cards/{cardId}/limit-logs', [CanteenSpendingLimitController::class, 'logs'])->whereNumber('cardId');
             Route::get('/cards/{cardId}/orders', [CanteenSpendingLimitController::class, 'orders'])->whereNumber('cardId');
             Route::post('/cards/{cardId}/pos-purchases', [CanteenPosPurchaseController::class, 'store'])->whereNumber('cardId');
+
+            Route::middleware('role:parent')->group(function () {
+                Route::post('/cards/{cardId}/bank-links', [CanteenBankLinkController::class, 'store'])
+                    ->whereNumber('cardId')
+                    ->middleware('throttle:20,1');
+                Route::post('/bank-links/{bankLinkId}/verify-otp', [CanteenBankLinkController::class, 'verifyOtp'])->whereNumber('bankLinkId');
+                Route::post('/bank-links/{bankLinkId}/resend-otp', [CanteenBankLinkController::class, 'resendOtp'])->whereNumber('bankLinkId');
+                Route::post('/bank-links/{bankLinkId}/unlink/initiate', [CanteenBankLinkController::class, 'initiateUnlink'])
+                    ->whereNumber('bankLinkId')
+                    ->middleware('throttle:10,1');
+                Route::post('/bank-links/{bankLinkId}/unlink/verify-otp', [CanteenBankLinkController::class, 'verifyUnlinkOtp'])
+                    ->whereNumber('bankLinkId')
+                    ->middleware('throttle:10,1');
+                Route::post('/bank-links/{bankLinkId}/unlink/resend-otp', [CanteenBankLinkController::class, 'resendUnlinkOtp'])
+                    ->whereNumber('bankLinkId')
+                    ->middleware('throttle:10,1');
+
+                Route::put('/cards/{cardId}/spending-limit', [CanteenSpendingLimitController::class, 'update'])->whereNumber('cardId');
+            });
         });
 
         Route::prefix('admin')->middleware('role:staff,admin')->group(function () {

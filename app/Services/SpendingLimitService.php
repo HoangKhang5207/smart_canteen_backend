@@ -399,7 +399,7 @@ class SpendingLimitService
     {
         $cardExists = StudentCard::query()
             ->whereKey($cardId)
-            ->whereHas('student', fn ($q) => $q->where('user_id', $user->id)->where('is_active', true))
+            ->whereHas('student', fn ($q) => $q->accessibleBy($user))
             ->exists();
 
         if (! $cardExists) {
@@ -418,7 +418,7 @@ class SpendingLimitService
     {
         $cardExists = StudentCard::query()
             ->whereKey($cardId)
-            ->whereHas('student', fn ($q) => $q->where('user_id', $user->id)->where('is_active', true))
+            ->whereHas('student', fn ($q) => $q->accessibleBy($user))
             ->exists();
 
         if (! $cardExists) {
@@ -428,7 +428,6 @@ class SpendingLimitService
         return Order::query()
             ->with(['items.product', 'studentCard.student'])
             ->where('student_card_id', $cardId)
-            ->where('user_id', $user->id)
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->paginate($perPage)

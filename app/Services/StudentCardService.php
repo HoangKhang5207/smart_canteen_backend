@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Contracts\BankingGatewayInterface;
 use App\Enums\BankLinkStatus;
 use App\Enums\StudentCardStatus;
+use App\Enums\UserRole;
 use App\Models\BankLink;
 use App\Models\OtpVerification;
 use App\Models\Student;
@@ -28,12 +29,16 @@ class StudentCardService
     {
         $cards = $this->queryUserCards($user);
 
-        if ($cards->isEmpty() && $this->shouldAutoProvisionDemoCard()) {
+        $roleEnum = $user->role instanceof UserRole
+            ? $user->role
+            : (UserRole::tryFrom((string) $user->role) ?? UserRole::CUSTOMER);
+
+        if ($cards->isEmpty() && $roleEnum->isParentEquivalent() && $this->shouldAutoProvisionDemoCard()) {
             DB::transaction(function () use ($user): void {
                 User::query()->whereKey($user->id)->lockForUpdate()->first();
 
                 $alreadyHasCard = StudentCard::query()
-                    ->whereHas('student', fn ($q) => $q->where('user_id', $user->id)->where('is_active', true))
+                    ->whereHas('student', fn ($q) => $q->accessibleBy($user))
                     ->exists();
 
                 if (! $alreadyHasCard) {
@@ -52,7 +57,7 @@ class StudentCardService
         return StudentCard::query()
             ->with(['student', 'activeBankLink', 'spendingLimit'])
             ->whereKey($cardId)
-            ->whereHas('student', fn ($q) => $q->where('user_id', $user->id)->where('is_active', true))
+            ->whereHas('student', fn ($q) => $q->accessibleBy($user))
             ->firstOrFail();
     }
 
@@ -63,7 +68,7 @@ class StudentCardService
     {
         return StudentCard::query()
             ->with(['student', 'activeBankLink', 'spendingLimit'])
-            ->whereHas('student', fn ($q) => $q->where('user_id', $user->id)->where('is_active', true))
+            ->whereHas('student', fn ($q) => $q->accessibleBy($user))
             ->orderBy('id')
             ->get();
     }

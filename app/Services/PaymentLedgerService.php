@@ -15,6 +15,7 @@ class PaymentLedgerService
         string $provider,
         string $providerReference,
         ?string $idempotencyKey = null,
+        ?string $gatewayTxnRef = null,
     ): PaymentTransaction {
         return PaymentTransaction::create([
             'order_id' => $order->id,
@@ -27,7 +28,7 @@ class PaymentLedgerService
             'status' => 'SUCCEEDED',
             'idempotency_key' => $idempotencyKey,
             'provider_reference' => $providerReference,
-            'gateway_txn_ref' => $order->code,
+            'gateway_txn_ref' => $gatewayTxnRef ?? $order->code,
             'response_meta' => [
                 'bank_code' => $bankLink->bank_code,
                 'account_number_masked' => $bankLink->account_number_masked,
@@ -70,6 +71,7 @@ class PaymentLedgerService
         string $failureCode,
         string $failureMessage,
         ?string $idempotencyKey = null,
+        ?string $gatewayTxnRef = null,
     ): PaymentTransaction {
         return PaymentTransaction::create([
             'order_id' => null,
@@ -84,7 +86,7 @@ class PaymentLedgerService
             'failure_message' => mb_substr($failureMessage, 0, 255),
             'idempotency_key' => $idempotencyKey,
             'provider_reference' => null,
-            'gateway_txn_ref' => null,
+            'gateway_txn_ref' => $gatewayTxnRef,
             'processed_at' => now(),
         ]);
     }

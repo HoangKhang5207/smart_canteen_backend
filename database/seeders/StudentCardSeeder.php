@@ -32,10 +32,30 @@ class StudentCardSeeder extends Seeder
             ]);
         }
 
+        // Demo student account for 4-role RBAC testing (read-only canteen + purchase within limit)
+        $studentPhoneFree = ! User::query()->where('phone', '0901234568')->exists();
+        $demoStudentUser = User::firstOrCreate(
+            ['zalo_user_id' => 'demo_student1'],
+            array_filter([
+                'name' => 'Titkul Student (Học sinh)',
+                'role' => UserRole::STUDENT,
+                'phone' => $studentPhoneFree ? '0901234568' : null,
+                'phone_verified_at' => $studentPhoneFree ? now() : null,
+            ], fn ($v) => $v !== null),
+        );
+
+        if ($demoStudentUser->phone === null && ! User::query()->where('phone', '0901234568')->exists()) {
+            $demoStudentUser->update([
+                'phone' => '0901234568',
+                'phone_verified_at' => now(),
+            ]);
+        }
+
         $student = Student::firstOrCreate(
             ['student_code' => 'HS-2026-0001'],
             [
                 'user_id' => $demoUser->id,
+                'student_user_id' => $demoStudentUser->id,
                 'full_name' => 'Titkul Student',
                 'school_name' => 'THCS Trần Phú',
                 'class_name' => '8A2',
@@ -43,6 +63,10 @@ class StudentCardSeeder extends Seeder
                 'is_active' => true,
             ],
         );
+
+        if ($student->student_user_id === null) {
+            $student->update(['student_user_id' => $demoStudentUser->id]);
+        }
 
         StudentCard::firstOrCreate(
             ['card_code' => 'F156BA'],

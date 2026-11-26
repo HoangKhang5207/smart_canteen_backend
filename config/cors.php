@@ -2,7 +2,7 @@
 
 $origins = array_values(array_filter(array_map(
     'trim',
-    explode(',', (string) env('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,https://h5.zdn.vn')),
+    explode(',', (string) env('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000,https://h5.zdn.vn,zbrowser://h5.zdn.vn')),
 )));
 
 return [

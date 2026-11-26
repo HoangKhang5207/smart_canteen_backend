@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\CanteenCardManagementController;
 use App\Http\Controllers\Admin\CategoryManagementController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\NotificationLogController;
 use App\Http\Controllers\Admin\OrderManagementController;
 use App\Http\Controllers\Admin\PosTerminalController;
 use App\Http\Controllers\Admin\ProductManagementController;
@@ -43,6 +44,7 @@ Route::prefix('admin')->group(function () {
             ->whereNumber('studentCard')
             ->name('admin.canteen.cards.show');
         Route::get('/canteen/reconciliation', [ReconciliationController::class, 'index'])->name('admin.canteen.reconciliation.index');
+        Route::get('/canteen/notifications', [NotificationLogController::class, 'index'])->name('admin.canteen.notifications.index');
 
         Route::middleware('role:admin')->group(function () {
             Route::get('/canteen/students/create', [StudentManagementController::class, 'create'])->name('admin.canteen.students.create');

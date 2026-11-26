@@ -127,17 +127,32 @@ class ProductManagementController extends Controller
         $stockQty = array_key_exists('stock_quantity', $validated) && $validated['stock_quantity'] !== null && $validated['stock_quantity'] !== ''
             ? (int) $validated['stock_quantity']
             : null;
+        $hasOriginalSnapshot = $request->has('original_stock_quantity');
+        $rawOriginal = $validated['original_stock_quantity'] ?? null;
+        $originalStockQty = ($rawOriginal !== null && $rawOriginal !== '') ? (int) $rawOriginal : null;
+        $stockExplicitlyChanged = ! $hasOriginalSnapshot || $stockQty !== $originalStockQty;
 
-        $product->update([
-            'category_id' => (int) $validated['category_id'],
-            'name' => trim($validated['name']),
-            'description' => ! empty($validated['description']) ? trim((string) $validated['description']) : null,
-            'price' => (int) $validated['price'],
-            'image_url' => ! empty($validated['image_url']) ? trim((string) $validated['image_url']) : null,
-            'is_available' => $request->boolean('is_available'),
-            'stock_quantity' => $stockQty,
-            'low_stock_threshold' => isset($validated['low_stock_threshold']) ? (int) $validated['low_stock_threshold'] : 5,
-        ]);
+        DB::transaction(function () use ($request, $product, $validated, $stockQty, $stockExplicitlyChanged): void {
+            /** @var Product $locked */
+            $locked = Product::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+
+            $updates = [
+                'category_id' => (int) $validated['category_id'],
+                'name' => trim($validated['name']),
+                'description' => ! empty($validated['description']) ? trim((string) $validated['description']) : null,
+                'price' => (int) $validated['price'],
+                'image_url' => ! empty($validated['image_url']) ? trim((string) $validated['image_url']) : null,
+                'is_available' => $request->boolean('is_available'),
+                'low_stock_threshold' => isset($validated['low_stock_threshold']) ? (int) $validated['low_stock_threshold'] : 5,
+            ];
+
+            // Avoid overwriting concurrent order stock decrements when Admin only edits metadata
+            if ($stockExplicitlyChanged) {
+                $updates['stock_quantity'] = $stockQty;
+            }
+
+            $locked->update($updates);
+        });
 
         return redirect('/admin/products')->with('status', 'Đã cập nhật thông tin món ăn.');
     }
@@ -204,6 +219,7 @@ class ProductManagementController extends Controller
             'description' => ['nullable', 'string', 'max:1000'],
             'price' => ['required', 'integer', 'min:1000', 'max:10000000'],
             'stock_quantity' => ['nullable', 'integer', 'min:0', 'max:100000'],
+            'original_stock_quantity' => ['nullable', 'integer', 'min:0', 'max:100000'],
             'low_stock_threshold' => ['nullable', 'integer', 'min:0', 'max:1000'],
             'image_url' => [
                 'nullable',

@@ -247,6 +247,7 @@
             <a href="{{ route('admin.canteen.students.index') }}" class="nav-link {{ request()->routeIs('admin.canteen.students.*') ? 'active' : '' }}">Học sinh</a>
             <a href="{{ route('admin.canteen.cards.index') }}" class="nav-link {{ request()->routeIs('admin.canteen.cards.*') ? 'active' : '' }}">Thẻ Căn tin</a>
             <a href="{{ route('admin.canteen.reconciliation.index') }}" class="nav-link {{ request()->routeIs('admin.canteen.reconciliation.*') ? 'active' : '' }}">Đối soát</a>
+            <a href="{{ route('admin.canteen.notifications.index') }}" class="nav-link {{ request()->routeIs('admin.canteen.notifications.*') ? 'active' : '' }}">Thông báo</a>
             <a href="{{ route('admin.products.index') }}" class="nav-link {{ request()->routeIs('admin.products.*') ? 'active' : '' }}">Món ăn &amp; Kho</a>
             <a href="{{ route('admin.categories.index') }}" class="nav-link {{ request()->routeIs('admin.categories.*') ? 'active' : '' }}">Danh mục</a>
         </nav>

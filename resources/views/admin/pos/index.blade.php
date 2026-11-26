@@ -107,24 +107,21 @@
 
         <div class="card">
             <h2 style="font-size: 0.95rem; margin: 0 0 0.65rem;">Đơn POS gần đây hôm nay</h2>
-            @if ($recentPosOrders->isEmpty())
-                <p style="font-size: 0.83rem; color: var(--text-muted); margin: 0;">Chưa có giao dịch POS nào trong ngày.</p>
-            @else
-                <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.83rem;">
-                    @foreach ($recentPosOrders as $posOrder)
-                        <li style="padding: 0.45rem 0; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
-                            <div>
-                                <strong>{{ $posOrder->code }}</strong>
-                                <div style="font-size: 0.75rem; color: var(--text-muted);">
-                                    {{ $posOrder->studentCard?->student?->full_name ?? 'Khách tại quầy' }}
-                                    · {{ number_format($posOrder->total_amount, 0, ',', '.') }} ₫
-                                </div>
+            <p id="pos-recent-empty" style="font-size: 0.83rem; color: var(--text-muted); margin: 0; {{ $recentPosOrders->isEmpty() ? '' : 'display:none;' }}">Chưa có giao dịch POS nào trong ngày.</p>
+            <ul id="pos-recent-list" style="list-style: none; padding: 0; margin: 0; font-size: 0.83rem;">
+                @foreach ($recentPosOrders as $posOrder)
+                    <li style="padding: 0.45rem 0; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
+                        <div>
+                            <strong>{{ $posOrder->code }}</strong>
+                            <div style="font-size: 0.75rem; color: var(--text-muted);">
+                                {{ $posOrder->studentCard?->student?->full_name ?? 'Khách tại quầy' }}
+                                · {{ number_format($posOrder->total_amount, 0, ',', '.') }} ₫
                             </div>
-                            <a href="{{ route('admin.pos.receipt', $posOrder) }}" target="_blank" rel="noopener" class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Biên lai</a>
-                        </li>
-                    @endforeach
-                </ul>
-            @endif
+                        </div>
+                        <a href="{{ route('admin.pos.receipt', $posOrder) }}" target="_blank" rel="noopener" class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Biên lai</a>
+                    </li>
+                @endforeach
+            </ul>
         </div>
     </div>
 </div>
@@ -427,6 +424,26 @@
             checkoutOk.innerHTML =
                 '<strong>Thanh toán thành công: ' + escapeHtml(data.code) + '</strong> (' + fmtVnd(data.total_amount) + ')<br>' +
                 '<a href="' + escapeHtml(data.receipt_url) + '" target="_blank" rel="noopener" class="btn btn-primary" style="margin-top:0.5rem;">Xem &amp; In biên lai POS →</a>';
+
+            if (data.created) {
+                const recentEmpty = document.getElementById('pos-recent-empty');
+                const recentList = document.getElementById('pos-recent-list');
+                if (recentEmpty) recentEmpty.style.display = 'none';
+                if (recentList) {
+                    const li = document.createElement('li');
+                    li.style.cssText = 'padding:0.45rem 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:0.5rem;';
+                    li.innerHTML =
+                        '<div><strong>' + escapeHtml(data.code) + '</strong>' +
+                        '<div style="font-size:0.75rem;color:var(--text-muted);">' +
+                        escapeHtml(data.student_name || 'Khách tại quầy') + ' · ' + fmtVnd(data.total_amount) +
+                        '</div></div>' +
+                        '<a href="' + escapeHtml(data.receipt_url) + '" target="_blank" rel="noopener" class="btn btn-secondary" style="padding:0.25rem 0.5rem;font-size:0.75rem;">Biên lai</a>';
+                    recentList.prepend(li);
+                    while (recentList.children.length > 10) {
+                        recentList.lastElementChild?.remove();
+                    }
+                }
+            }
         } catch {
             checkoutErr.textContent = 'Lỗi mạng khi gửi đơn POS. Vui lòng thử lại.';
             checkoutErr.style.display = 'block';

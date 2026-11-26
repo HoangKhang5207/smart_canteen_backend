@@ -2,6 +2,8 @@
 
 namespace App\Services\Payment;
 
+use App\Enums\NotificationSeverity;
+use App\Enums\NotificationType;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
@@ -9,6 +11,7 @@ use App\Exceptions\PaymentGatewayException;
 use App\Models\Order;
 use App\Models\PaymentTransaction;
 use App\Models\User;
+use App\Services\NotificationService;
 use App\Services\SpendingLimitService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
@@ -20,6 +23,10 @@ class VnpayGatewayService
     private const LOCAL_SIMULATOR_TMN = 'SMARTCANTEEN';
 
     private const LOCAL_SIMULATOR_SECRET = 'LOCAL_VNPAY_SANDBOX_SECRET_KEY_2026';
+
+    public function __construct(
+        private readonly NotificationService $notifications,
+    ) {}
 
     /**
      * @return array{tmn_code: string, hash_secret: string, payment_url: string, return_url: string, simulated: bool}
@@ -321,6 +328,10 @@ class VnpayGatewayService
                         'payment_status' => $nextPaymentStatus,
                         'payment_reference' => $effectiveRef,
                     ]);
+
+                    if ($nextPaymentStatus === PaymentStatus::PAID) {
+                        $this->notifications->notifyPurchaseSuccess($order);
+                    }
                 }
             } else {
                 $effectiveCode = $responseCode !== '' && $responseCode !== '00'
@@ -355,6 +366,21 @@ class VnpayGatewayService
                     $order->update([
                         'payment_status' => PaymentStatus::FAILED,
                     ]);
+
+                    $this->notifications->sendAfterCommit(
+                        recipientUserId: (int) $order->user_id,
+                        type: NotificationType::PAYMENT_FAILED,
+                        severity: NotificationSeverity::ERROR,
+                        title: sprintf('Thanh toán VNPay thất bại #%s', $order->code),
+                        body: $failureMessage,
+                        actionUrl: '/orders/'.$order->id,
+                        meta: [
+                            'order_id' => $order->id,
+                            'order_code' => $order->code,
+                            'error_code' => $failureCode,
+                            'amount' => (int) $order->total_amount,
+                        ],
+                    );
                 }
             }
 

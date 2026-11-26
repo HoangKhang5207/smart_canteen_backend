@@ -31,6 +31,7 @@ class OrderService
     public function __construct(
         private readonly SpendingLimitService $spendingLimitService,
         private readonly PaymentLedgerService $ledger,
+        private readonly NotificationService $notifications,
     ) {}
 
     /**
@@ -179,6 +180,11 @@ class OrderService
                         idempotencyKey: $idempotencyKey,
                         gatewayTxnRef: $failedContext['gateway_txn_ref'],
                     );
+
+                    $this->notifications->notifyPurchaseSuccess(
+                        $order,
+                        (int) $lockedLimitBundle['limit']->daily_limit,
+                    );
                 }
 
                 return $order->load(['items.product', 'studentCard.student']);
@@ -198,6 +204,7 @@ class OrderService
                 idempotencyKey: $idempotencyKey,
                 gatewayTxnRef: $failedContext['gateway_txn_ref'],
             );
+            $this->notifyCardPaymentFailure($user, $failedContext['card_id'], $failedContext['amount'], $e->errorCode, $e->getMessage());
             throw $e;
         } catch (PaymentGatewayException $e) {
             $this->ledger->recordFailedAttempt(
@@ -212,6 +219,7 @@ class OrderService
                 idempotencyKey: $idempotencyKey,
                 gatewayTxnRef: $failedContext['gateway_txn_ref'],
             );
+            $this->notifyCardPaymentFailure($user, $failedContext['card_id'], $failedContext['amount'], $e->errorCode, $e->getMessage());
             throw $e;
         } catch (UniqueConstraintViolationException $e) {
             return $this->resolveIdempotentConflict($user, $idempotencyKey, $payloadHash, $e);
@@ -339,6 +347,11 @@ class OrderService
                     gatewayTxnRef: $gatewayTxnRef,
                 );
 
+                $this->notifications->notifyPurchaseSuccess(
+                    $order,
+                    (int) $lockedLimitBundle['limit']->daily_limit,
+                );
+
                 return $order->load(['items.product', 'studentCard.student']);
             });
 
@@ -356,6 +369,7 @@ class OrderService
                 idempotencyKey: $idempotencyKey,
                 gatewayTxnRef: $failedContext['gateway_txn_ref'],
             );
+            $this->notifyCardPaymentFailure($user, $failedContext['card_id'], $failedContext['amount'], $e->errorCode, $e->getMessage());
             throw $e;
         } catch (PaymentGatewayException $e) {
             $this->ledger->recordFailedAttempt(
@@ -370,6 +384,7 @@ class OrderService
                 idempotencyKey: $idempotencyKey,
                 gatewayTxnRef: $failedContext['gateway_txn_ref'],
             );
+            $this->notifyCardPaymentFailure($user, $failedContext['card_id'], $failedContext['amount'], $e->errorCode, $e->getMessage());
             throw $e;
         } catch (UniqueConstraintViolationException $e) {
             return $this->resolveIdempotentConflict($user, $idempotencyKey, $payloadHash, $e);
@@ -552,6 +567,11 @@ class OrderService
                         idempotencyKey: $idempotencyKey,
                         gatewayTxnRef: $failedContext['gateway_txn_ref'],
                     );
+
+                    $this->notifications->notifyPurchaseSuccess(
+                        $order,
+                        (int) $lockedLimitBundle['limit']->daily_limit,
+                    );
                 }
 
                 return $order->load(['items.product', 'studentCard.student', 'user']);
@@ -571,6 +591,7 @@ class OrderService
                 idempotencyKey: $idempotencyKey,
                 gatewayTxnRef: $failedContext['gateway_txn_ref'],
             );
+            $this->notifyCardPaymentFailure($ownerUser, $failedContext['card_id'], $failedContext['amount'], $e->errorCode, $e->getMessage());
             throw $e;
         } catch (PaymentGatewayException $e) {
             $this->ledger->recordFailedAttempt(
@@ -585,6 +606,7 @@ class OrderService
                 idempotencyKey: $idempotencyKey,
                 gatewayTxnRef: $failedContext['gateway_txn_ref'],
             );
+            $this->notifyCardPaymentFailure($ownerUser, $failedContext['card_id'], $failedContext['amount'], $e->errorCode, $e->getMessage());
             throw $e;
         } catch (UniqueConstraintViolationException $e) {
             return $this->resolveIdempotentConflict($ownerUser, $idempotencyKey, $payloadHash, $e);
@@ -682,6 +704,9 @@ class OrderService
                 );
             }
 
+            $wasPaidCardOrder = in_array($lockedOrder->payment_method, [PaymentMethod::STUDENT_CARD, PaymentMethod::STUDENT_CARD_POS], true)
+                && $lockedOrder->payment_status === PaymentStatus::PAID;
+
             $lockedOrder->update([
                 'status' => $nextStatus,
                 'version' => (int) $lockedOrder->version + 1,
@@ -701,6 +726,14 @@ class OrderService
                 }
 
                 $this->spendingLimitService->refundForCancelledOrder($lockedOrder, $lockedLimit);
+
+                if ($wasPaidCardOrder) {
+                    $this->notifications->notifyOrderRefunded($lockedOrder);
+                } else {
+                    $this->notifications->notifyOrderStatusUpdated($lockedOrder, $nextStatus);
+                }
+            } elseif ($nextStatus === OrderStatus::READY) {
+                $this->notifications->notifyOrderStatusUpdated($lockedOrder, $nextStatus);
             }
 
             OrderStatusLog::create([
@@ -854,5 +887,33 @@ class OrderService
         }
 
         return hash('sha256', json_encode($data, JSON_THROW_ON_ERROR));
+    }
+
+    private function notifyCardPaymentFailure(
+        User $fallbackUser,
+        ?int $cardId,
+        int $amount,
+        string $errorCode,
+        string $message,
+    ): void {
+        $recipient = $fallbackUser;
+        if ($cardId !== null) {
+            $parent = StudentCard::query()
+                ->with('student.user')
+                ->whereKey($cardId)
+                ->first()?->student?->user;
+            if ($parent !== null) {
+                $recipient = $parent;
+            }
+        }
+
+        $this->notifications->notifyPaymentFailed(
+            recipient: $recipient,
+            amount: $amount,
+            errorCode: $errorCode,
+            reason: $message,
+            orderId: null,
+            studentCardId: $cardId,
+        );
     }
 }
